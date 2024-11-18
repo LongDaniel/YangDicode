@@ -1,0 +1,2432 @@
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C     FFT AND SPECTRAL METHOD SUBROUTINES
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+
+C=========================================================================
+      SUBROUTINE DEALIASX_PARA(NXMOD,NZ,NXMAX,NYMAX,WORK,TRIGSX,IFAX,F,
+     1                         NCPU)
+
+      INCLUDE "mpif.h"
+
+      INTEGER MYID,NUMPROCS,IERR
+      
+      REAL F(NXMAX,NYMAX/NCPU,*),WORK(*),TRIGSX(*)
+      INTEGER IFAX(*)
+
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+
+      DO K=1,NZ
+
+         CALL FFTX_PARA(F(1,1,K),WORK,TRIGSX,IFAX,NXMOD,NXMAX,NYMAX,
+     1                  NCPU,-1)
+        
+         NXPAT=NXMOD/3*2
+         DO I=1,NXMOD+2
+            DO J=1,NYMAX/NCPU
+               IF(I.GT.NXPAT) F(I,J,K)=0.
+            ENDDO
+         ENDDO
+
+         CALL FFTX_PARA(F(1,1,K),WORK,TRIGSX,IFAX,NXMOD,NXMAX,NYMAX,
+     1                  NCPU,1)
+         
+      ENDDO
+      
+      RETURN
+      END
+      
+C---------------------------------------------------------------------
+      SUBROUTINE DEALIASY_PARA(NYMOD,NZ,NXMAX,NYMAX,WORK,TRIGSY,IFAX,F,
+     1                         NCPU)
+      
+      INCLUDE "mpif.h"
+
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL F(NXMAX,NYMAX/NCPU,*),AT(NXMAX,NYMAX/NCPU)
+      REAL WORK(*),TRIGSY(*)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      INTEGER IFAX(*)
+
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      DO K=1,NZ
+         
+         CALL MPE_2DTRANS(F(1,1,K),AT,B,NXMAX,NYMAX/NCPU,NCPU)
+         
+         CALL FFTX_PARA(B,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1                  NCPU,-1)
+         
+         NYPAT=NYMOD/3*2
+         DO I=1,NYMOD+2
+            DO J=1,NXMAX/NCPU
+               IF(I.GT.NYPAT) B(I,J)=0.
+            ENDDO
+         ENDDO
+         
+         CALL FFTX_PARA(B,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1                  NCPU,1)
+
+         CALL MPE_2DTRANS(B,BT,F(1,1,K),NYMAX,NXMAX/NCPU,NCPU)
+
+      ENDDO
+      
+      RETURN
+      END
+      
+      
+      
+C----------------------------------------------------------------------
+      SUBROUTINE DEALIASXY_PARA(NXMOD,NYMOD,NZ,NXMAX,NYMAX,WORK,TRIGSX,
+     1                          TRIGSY,IFAX,F,NCPU)
+
+      INCLUDE "mpif.h"
+
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL F(NXMAX,NYMAX/NCPU,*),AT(NXMAX,NYMAX/NCPU)
+      REAL WORK(*),TRIGSX(*),TRIGSY(*)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      INTEGER IFAX(*)
+
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+
+C      goto 999
+
+      DO K=1,NZ
+         
+         CALL FFTX_PARA(F(1,1,K),WORK,TRIGSX,IFAX,NXMOD,NXMAX,NYMAX,
+     1                  NCPU,-1)
+         
+         NXPAT=NXMOD/2
+         DO I=1,NXMOD+2
+            DO J=1,NYMAX/NCPU
+               IF(I.GT.NXPAT) F(I,J,K)=0.
+            ENDDO
+         ENDDO
+
+         CALL MPE_2DTRANS(F(1,1,K),AT,B,NXMAX,NYMAX/NCPU,NCPU)
+
+         CALL FFTX_PARA(B,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1                  NCPU,-1)
+         
+         NYPAT=NYMOD/2
+         DO I=1,NYMOD+2
+            DO J=1,NXMAX/NCPU
+               IF(I.GT.NYPAT) B(I,J)=0.
+            ENDDO
+         ENDDO
+
+         CALL FFTX_PARA(B,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1                  NCPU,1)
+
+         CALL MPE_2DTRANS(B,BT,F(1,1,K),NYMAX,NXMAX/NCPU,NCPU)
+         
+         CALL FFTX_PARA(F(1,1,K),WORK,TRIGSX,IFAX,NXMOD,NXMAX,NYMAX,
+     1                  NCPU,1)
+         
+      ENDDO
+
+ 999  continue
+      
+      RETURN
+      END
+
+C----------------------------------------------------------------------------
+      SUBROUTINE DEALIASXY_PARA2(NXMOD,NYMOD,NZ,NXMAX,NYMAX,WORK,TRIGSX,
+     1                          TRIGSY,IFAX,F,NCPU)
+
+      INCLUDE "mpif.h"
+
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL F(NXMAX,NYMAX/NCPU,*),AT(NXMAX,NYMAX/NCPU)
+      REAL WORK(*),TRIGSX(*),TRIGSY(*)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      INTEGER IFAX(*)
+
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+
+c      goto 999
+
+      DO K=1,NZ
+         
+         CALL FFTX_PARA(F(1,1,K),WORK,TRIGSX,IFAX,NXMOD,NXMAX,NYMAX,
+     1                  NCPU,-1)
+         
+         NXPAT=NXMOD/3*2
+         DO I=1,NXMOD+2
+            DO J=1,NYMAX/NCPU
+               IF(I.GT.NXPAT) F(I,J,K)=0.
+            ENDDO
+         ENDDO
+
+         CALL MPE_2DTRANS(F(1,1,K),AT,B,NXMAX,NYMAX/NCPU,NCPU)
+
+         CALL FFTX_PARA(B,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1                  NCPU,-1)
+         
+         NYPAT=NYMOD/3*2
+         DO I=1,NYMOD+2
+            DO J=1,NXMAX/NCPU
+               IF(I.GT.NYPAT) B(I,J)=0.
+            ENDDO
+         ENDDO
+
+         CALL FFTX_PARA(B,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1                  NCPU,1)
+
+         CALL MPE_2DTRANS(B,BT,F(1,1,K),NYMAX,NXMAX/NCPU,NCPU)
+         
+         CALL FFTX_PARA(F(1,1,K),WORK,TRIGSX,IFAX,NXMOD,NXMAX,NYMAX,
+     1                  NCPU,1)
+         
+      ENDDO
+
+ 999  continue
+      
+      RETURN
+      END
+
+C----------------------------------------------------------------------
+      SUBROUTINE PDFX_PARA(A,AX,ATMP,WORK,TRIGSX,IFAX,PEX,NXMOD,
+     1                     NXMAX,NYMAX,NCPU)
+
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT AX(I,J)=DA/DX IN PHYSICAL DOMAIN
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),AX(NXMAX,*),ATMP(NXMAX,*),WORK(*)
+      REAL TRIGSX(*)
+      INTEGER IFAX(*)
+
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+      
+      CALL FFTX_PARA(ATMP,WORK,TRIGSX,IFAX,NXMOD,NXMAX,
+     1               NYMAX,NCPU,-1)
+ 
+      DO L=1,NXMOD+1,2
+         PMODX=PEX*(L-1)/2
+         DO M=1,NYMAX/NCPU
+            AX(L,M)=-PMODX*ATMP(L+1,M)
+            AX(L+1,M)=PMODX*ATMP(L,M)
+         ENDDO
+      ENDDO
+         
+      CALL FFTX_PARA(AX,WORK,TRIGSX,IFAX,NXMOD,NXMAX,
+     1               NYMAX,NCPU,1)
+      
+      RETURN
+      END
+      
+
+
+C----------------------------------------------------------------------      
+      SUBROUTINE PDFY_PARA(A,AY,ATMP,WORK,TRIGSY,IFAX,PEY,NXMOD,NYMOD,
+     1                     NXMAX,NYMAX,NCPU)
+      
+C     BY DI YANG 2005
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT AY(I,J)=DA/DY IN PHYSICAL DOMAIN      
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),AY(NXMAX,*),ATMP(NXMAX,*),WORK(*)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      REAL BY(NYMAX,NXMAX/NCPU)
+      REAL TRIGSY(*)
+      INTEGER IFAX(*)
+ 
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+      
+      CALL FFTY_PARA2(ATMP,B,WORK,TRIGSY,IFAX,NYMOD,NXMAX,NYMAX,
+     1                NCPU,-1)
+
+      DO L=1,NYMOD+1,2
+         PMODY=PEY*(L-1)/2
+         DO M=1,NXMAX/NCPU
+            BY(L,M)=-PMODY*B(L+1,M)
+            BY(L+1,M)=PMODY*B(L,M)
+         ENDDO
+      ENDDO
+      
+      CALL FFTX_PARA(BY,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1               NCPU,1)
+      
+      CALL MPE_2DTRANS(BY,BT,AY,NYMAX,NXMAX/NCPU,NCPU)
+      
+      RETURN
+      END
+
+
+C-----------------------------------------------------------------------
+      
+      SUBROUTINE PDF1D_PARA(A,AD,ATMP,WORK,TRIGSX,TRIGSY,IFAX,PEX,PEY,
+     1                      NXMOD,NYMOD,NXMAX,NYMAX,NCPU,IDIR)
+      
+      INCLUDE "mpif.h"
+
+C     BY DI YANG 2005
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT AD(I,J)=DA/DX OR DA/DY IN PHYSICAL DOMAIN
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),AD(NXMAX,*),ATMP(NXMAX,*),WORK(*)
+      REAL AT(NXMAX,NYMAX/NCPU),BD(NYMAX,NXMAX/NCPU)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      REAL TRIGSX(*),TRIGSY(*)
+      INTEGER IFAX(*)
+      INTEGER IDIR
+
+      
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+
+      IF(IDIR.EQ.1) THEN
+         
+         CALL FFTX_PARA(ATMP,WORK,TRIGSX,IFAX,NXMOD,NXMAX,
+     1                  NYMAX,NCPU,-1)
+          
+         DO L=1,NXMOD+1,2
+            PMODX=PEX*(L-1)/2
+            DO M=1,NYMAX/NCPU
+               AD(L,M)=-PMODX*ATMP(L+1,M)
+               AD(L+1,M)=PMODX*ATMP(L,M)
+            ENDDO
+         ENDDO
+         
+          CALL FFTX_PARA(AD,WORK,TRIGSX,IFAX,NXMOD,NXMAX,
+     1                   NYMAX,NCPU,1)
+         
+      ELSE IF(IDIR.EQ.2) THEN
+        
+         CALL FFTY_PARA2(ATMP,B,WORK,TRIGSY,IFAX,NYMOD,NXMAX,
+     1                   NYMAX,NCPU,-1)
+
+         DO L=1,NYMOD+1,2
+            PMODY=PEY*(L-1)/2
+            DO M=1,NXMAX/NCPU
+               BD(L,M)=-PMODY*B(L+1,M)
+               BD(L+1,M)=PMODY*B(L,M)
+            ENDDO
+         ENDDO
+ 
+         CALL FFTX_PARA(BD,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1                  NCPU,1)
+         
+         CALL MPE_2DTRANS(BD,BT,AD,NYMAX,NXMAX/NCPU,NCPU)
+         
+      ELSE 
+         
+         WRITE(*,*) "DIR SHOULD BE 1 OR 2"
+         
+      ENDIF
+      
+      RETURN
+      END
+
+
+
+C---------------------------------------------------------------------
+      SUBROUTINE PDFXY_PARA(A,AD,ATMP,WORK,TRIGSX,TRIGSY,IFAX,PEX,PEY,
+     1                      NXMOD,NYMOD,NXMAX,NYMAX,NCPU)
+
+C     BY DI YANG 2005
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT AD(I,J)=D^2A/DX^2 IN PHYSICAL DOMAIN
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),AD(NXMAX,*),ATMP(NXMAX,*),WORK(*)
+      REAL BD(NYMAX,NXMAX/NCPU)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      REAL TRIGSX(*),TRIGSY(*)
+      INTEGER IFAX(*)
+     
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+      
+      
+      CALL FFTX_PARA(ATMP,WORK,TRIGSX,IFAX,NXMOD,NXMAX,NYMAX,
+     1               NCPU,-1)
+      
+      DO L=1,NXMOD+1,2
+         PMODX=PEX*(L-1)/2
+         DO M=1,NYMAX/NCPU
+            AD(L,M)=-PMODX*ATMP(L+1,M)
+            AD(L+1,M)=PMODX*ATMP(L,M)
+         ENDDO
+      ENDDO
+      
+      CALL FFTY_PARA2(AD,B,WORK,TRIGSY,IFAX,NYMOD,NXMAX,NYMAX,
+     1                NCPU,-1)
+      
+      DO L=1,NYMOD+1,2
+         PMODY=PEY*(L-1)/2
+         DO M=1,NXMAX/NCPU
+            BD(L,M)=-PMODY*B(L+1,M)
+            BD(L+1,M)=PMODY*B(L,M)
+         ENDDO
+      ENDDO
+      
+      CALL FFTX_PARA(BD,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1               NCPU,1)
+      
+      CALL FFTY_PARA2(BD,AD,WORK,TRIGSX,IFAX,NXMOD,NYMAX,NXMAX,
+     1                NCPU,1)
+      
+      RETURN
+      END
+
+
+      
+C----------------------------------------------------------------------
+      SUBROUTINE PDFXX_PARA(A,AXX,ATMP,WORK,TRIGSX,IFAX,PEX,NXMOD,
+     1                      NXMAX,NYMAX,NCPU)
+
+C     BY DI YANG 2005
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT AXX(I,J)=D^2A/DX^2 IN PHYSICAL DOMAIN
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),AXX(NXMAX,*),ATMP(NXMAX,*),WORK(*)
+      REAL TRIGSX(*)
+      INTEGER IFAX(*) 
+      
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+
+      CALL FFTX_PARA(ATMP,WORK,TRIGSX,IFAX,NXMOD,NXMAX,
+     1               NYMAX,NCPU,-1)
+      
+      DO L=1,NXMOD+1,2
+         AA=-(PEX*(L-1)/2)**2
+         DO M=1,NYMAX/NCPU
+            AXX(L,M)=AA*ATMP(L,M)
+            AXX(L+1,M)=AA*ATMP(L+1,M)
+         ENDDO
+      ENDDO
+
+C+++
+c     current fft packet requires axx(nxmod+2,m)=0.
+c     the following will make pdfx and pdfxx consistent
+      l=nxmod+1
+      do m=1,nymax/ncpu
+         axx(l,m)=0.
+         axx(l+1,m)=0.
+      enddo
+C+++
+      
+      CALL FFTX_PARA(AXX,WORK,TRIGSX,IFAX,NXMOD,NXMAX,
+     1               NYMAX,NCPU,1)
+      
+      RETURN
+      END
+      
+      
+C-----------------------------------------------------------------------
+      SUBROUTINE PDFYY_PARA(A,AYY,ATMP,WORK,TRIGSY,IFAX,PEY,NXMOD,NYMOD,
+     1                      NXMAX,NYMAX,NCPU)
+
+C     BY DI YANG 2005
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT AYY(I,J)=D^2A/DY^2 IN PHYSICAL DOMAIN
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),AYY(NXMAX,*),ATMP(NXMAX,*),WORK(*)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      REAL BYY(NYMAX,NXMAX/NCPU)
+      REAL TRIGSY(*)
+      INTEGER IFAX(*)
+      
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+      
+      CALL FFTY_PARA2(ATMP,B,WORK,TRIGSY,IFAX,NYMOD,NXMAX,NYMAX,
+     1                NCPU,-1)
+      
+      DO L=1,NYMOD+1,2
+         AA=-(PEY*(L-1)/2)**2
+         DO M=1,NXMAX/NCPU
+            BYY(L,M)=AA*B(L,M)
+            BYY(L+1,M)=AA*B(L+1,M)
+         ENDDO
+      ENDDO
+
+C+++
+c     current fft packet requires byy(nymod+2,m)=0.
+c     the following will make pdfy and pdfyy consistent
+      l=nymod+1
+      do m=1,nxmax/ncpu
+         byy(l,m)=0.
+         byy(l+1,m)=0.
+      enddo
+C+++
+      
+      CALL FFTX_PARA(BYY,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1               NCPU,1)
+      
+      CALL MPE_2DTRANS(BYY,BT,AYY,NYMAX,NXMAX/NCPU,NCPU)
+      
+      RETURN
+      END
+
+C----------------------------------------------------------------
+      SUBROUTINE PDFX_PARA_(A,ATMP,WORK,TRIGSX,IFAX,PEX,NXMOD,
+     1     NXMAX,NYMAX,NCPU)
+
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT A(I,J)=DA/DX IN PHYSICAL DOMAIN
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),ATMP(NXMAX,*),WORK(*)
+      REAL TRIGSX(*)
+      INTEGER IFAX(*)
+
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+      
+      CALL FFTX_PARA(ATMP,WORK,TRIGSX,IFAX,NXMOD,NXMAX,
+     1               NYMAX,NCPU,-1)
+ 
+      DO L=1,NXMOD+1,2
+         PMODX=PEX*(L-1)/2
+         DO M=1,NYMAX/NCPU
+            A(L,M)=-PMODX*ATMP(L+1,M)
+            A(L+1,M)=PMODX*ATMP(L,M)
+         ENDDO
+      ENDDO
+         
+      CALL FFTX_PARA(A,WORK,TRIGSX,IFAX,NXMOD,NXMAX,
+     1               NYMAX,NCPU,1)
+      
+      RETURN
+      END 
+
+C--------------------------------------------------------
+      SUBROUTINE PDFY_PARA_(A,ATMP,WORK,TRIGSY,IFAX,PEY,NXMOD,NYMOD,
+     1     NXMAX,NYMAX,NCPU)
+      
+C     BY DI YANG 2005
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT A(I,J)=DA/DY IN PHYSICAL DOMAIN      
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),ATMP(NXMAX,*),WORK(*)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      REAL BY(NYMAX,NXMAX/NCPU)
+      REAL TRIGSY(*)
+      INTEGER IFAX(*)
+ 
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+      
+      CALL FFTY_PARA2(ATMP,B,WORK,TRIGSY,IFAX,NYMOD,NXMAX,NYMAX,
+     1                NCPU,-1)
+
+      DO L=1,NYMOD+1,2
+         PMODY=PEY*(L-1)/2
+         DO M=1,NXMAX/NCPU
+            BY(L,M)=-PMODY*B(L+1,M)
+            BY(L+1,M)=PMODY*B(L,M)
+         ENDDO
+      ENDDO
+      
+      CALL FFTX_PARA(BY,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1               NCPU,1)
+      
+      CALL MPE_2DTRANS(BY,BT,A,NYMAX,NXMAX/NCPU,NCPU)
+      
+      RETURN
+      END
+
+C----------------------------------------------------------------
+      SUBROUTINE PDFXX_PARA_(A,ATMP,WORK,TRIGSX,IFAX,PEX,NXMOD,
+     1     NXMAX,NYMAX,NCPU)
+
+C     BY DI YANG 2005
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT A(I,J)=D^2A/DX^2 IN PHYSICAL DOMAIN
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),ATMP(NXMAX,*),WORK(*)
+      REAL TRIGSX(*)
+      INTEGER IFAX(*) 
+      
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+
+      CALL FFTX_PARA(ATMP,WORK,TRIGSX,IFAX,NXMOD,NXMAX,
+     1               NYMAX,NCPU,-1)
+      
+      DO L=1,NXMOD+1,2
+         AA=-(PEX*(L-1)/2)**2
+         DO M=1,NYMAX/NCPU
+            A(L,M)=AA*ATMP(L,M)
+            A(L+1,M)=AA*ATMP(L+1,M)
+         ENDDO
+      ENDDO
+
+C+++
+c     current fft packet requires a(nxmod+2,m)=0.
+c     the following will make pdfx and pdfxx consistent
+      l=nxmod+1
+      do m=1,nymax/ncpu
+         a(l,m)=0.
+         a(l+1,m)=0.
+      enddo
+C+++
+      
+      CALL FFTX_PARA(A,WORK,TRIGSX,IFAX,NXMOD,NXMAX,
+     1               NYMAX,NCPU,1)
+      
+      RETURN
+      END
+
+C----------------------------------------------------------------
+      SUBROUTINE PDFYY_PARA_(A,ATMP,WORK,TRIGSY,IFAX,PEY,NXMOD,NYMOD,
+     1                      NXMAX,NYMAX,NCPU)
+
+C     BY DI YANG 2005
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT A(I,J)=D^2A/DY^2 IN PHYSICAL DOMAIN
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),ATMP(NXMAX,*),WORK(*)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      REAL BYY(NYMAX,NXMAX/NCPU)
+      REAL TRIGSY(*)
+      INTEGER IFAX(*)
+      
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+      
+      CALL FFTY_PARA2(ATMP,B,WORK,TRIGSY,IFAX,NYMOD,NXMAX,NYMAX,
+     1                NCPU,-1)
+      
+      DO L=1,NYMOD+1,2
+         AA=-(PEY*(L-1)/2)**2
+         DO M=1,NXMAX/NCPU
+            BYY(L,M)=AA*B(L,M)
+            BYY(L+1,M)=AA*B(L+1,M)
+         ENDDO
+      ENDDO
+
+C+++
+c     current fft packet requires byy(nymod+2,m)=0.
+c     the following will make pdfy and pdfyy consistent
+      l=nymod+1
+      do m=1,nxmax/ncpu
+         byy(l,m)=0.
+         byy(l+1,m)=0.
+      enddo
+C+++
+      
+      CALL FFTX_PARA(BYY,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1               NCPU,1)
+      
+      CALL MPE_2DTRANS(BYY,BT,A,NYMAX,NXMAX/NCPU,NCPU)
+      
+      RETURN
+      END
+
+C-----------------------------------------------------------------
+      SUBROUTINE PDFXY_PARA_(A,ATMP,WORK,TRIGSX,TRIGSY,IFAX,PEX,PEY,
+     1                      NXMOD,NYMOD,NXMAX,NYMAX,NCPU)
+
+C     BY DI YANG 2005
+C     INPUT A(I,J) IN PHYSICAL DOMAIN; UNCHANGED IN RETURN
+C     OUTPUT A(I,J)=D^2A/DX^2 IN PHYSICAL DOMAIN
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+
+      REAL A(NXMAX,*),AD(NXMAX,NYMAX/NCPU),ATMP(NXMAX,*),WORK(*)
+      REAL BD(NYMAX,NXMAX/NCPU)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      REAL TRIGSX(*),TRIGSY(*)
+      INTEGER IFAX(*)
+     
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      DO I=1,NXMOD
+         DO J=1,NYMAX/NCPU
+            ATMP(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+      
+      
+      CALL FFTX_PARA(ATMP,WORK,TRIGSX,IFAX,NXMOD,NXMAX,NYMAX,
+     1               NCPU,-1)
+      
+      DO L=1,NXMOD+1,2
+         PMODX=PEX*(L-1)/2
+         DO M=1,NYMAX/NCPU
+            AD(L,M)=-PMODX*ATMP(L+1,M)
+            AD(L+1,M)=PMODX*ATMP(L,M)
+         ENDDO
+      ENDDO
+      
+      CALL FFTY_PARA2(AD,B,WORK,TRIGSY,IFAX,NYMOD,NXMAX,NYMAX,
+     1                NCPU,-1)
+      
+      DO L=1,NYMOD+1,2
+         PMODY=PEY*(L-1)/2
+         DO M=1,NXMAX/NCPU
+            BD(L,M)=-PMODY*B(L+1,M)
+            BD(L+1,M)=PMODY*B(L,M)
+         ENDDO
+      ENDDO
+      
+      CALL FFTX_PARA(BD,WORK,TRIGSY,IFAX,NYMOD,NYMAX,NXMAX,
+     1               NCPU,1)
+      
+      CALL FFTY_PARA2(BD,A,WORK,TRIGSX,IFAX,NXMOD,NYMAX,NXMAX,
+     1                NCPU,1)
+      
+      RETURN
+      END
+
+C---------------------------------------------------------
+
+      SUBROUTINE FFTXY_PARA(A,WORK,TRIGSX,TRIGSY,IFAX,NXMOD,NYMOD,NXMAX,
+     1                      NYMAX,NCPU,ISGN)
+
+C     BY DI YANG 2005
+C     IF ISGN=-1,INPUT A(I,J) IN PHYSICAL DOMAIN. DO FFT TO A(I,J) IN X
+C     AND Y DIRECTION. OUTPUT A(I,J) IN SPECTRAL DOMAIN.
+C     IF ISGN=1,INPUT A(I,J) IN SPECTRAL DOMAIN. DO INVERSE FFT TO A(I,J) 
+C     IN X AND Y DIRECTION. OUTPUT A(I,J) IN PHYSICAL DOMAIN.
+      
+      INCLUDE "mpif.h"
+
+      INTEGER MYID,NUMPROCS,IERR
+      REAL WORK(*)
+      REAL TRIGSX(*),TRIGSY(*)
+      INTEGER IFAX(*)
+      REAL A(NXMAX,NYMAX/NCPU),AT(NXMAX,NYMAX/NCPU)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      INTEGER JJ1,JJ2,ISGN
+      
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+
+      IF(ISGN.EQ.1) GOTO 50      
+
+      DO J=1,NYMAX/NCPU
+         DO I=NXMOD+1,NXMAX
+            A(I,J)=0.0
+         ENDDO
+      ENDDO
+
+C     FFT(ISGN=-1) IN X-DIRECTION
+      CALL FFTFAX(NXMOD,IFAX,TRIGSX)
+      CALL FFT991(A,WORK,TRIGSX,IFAX,1,NXMAX,NXMOD,NYMAX/NCPU,ISGN)
+      
+      CALL MPE_2DTRANS(A,AT,B,NXMAX,NYMAX/NCPU,NCPU)
+
+C     FFT(ISGN=-1) IN Y-DIRCTION
+      DO J=1,NXMAX/NCPU
+         DO I=NYMOD+1,NYMAX
+            B(I,J)=0.0
+         ENDDO
+      ENDDO
+      
+      CALL FFTFAX(NYMOD,IFAX,TRIGSY)
+      CALL FFT991(B,WORK,TRIGSY,IFAX,1,NYMAX,NYMOD,NXMAX/NCPU,ISGN)
+      
+      CALL MPE_2DTRANS(B,BT,A,NYMAX,NXMAX/NCPU,NCPU)
+      
+      GOTO 600
+
+ 50   CONTINUE
+         
+C     INVERSE FFT(ISGN=1) IN Y-DIRECTION
+      CALL MPE_2DTRANS(A,AT,B,NXMAX,NYMAX/NCPU,NCPU)
+
+      CALL FFTFAX(NYMOD,IFAX,TRIGSY)
+      CALL FFT991(B,WORK,TRIGSY,IFAX,1,NYMAX,NYMOD,NXMAX/NCPU,ISGN)
+
+C     INVERSE FFT(ISGN=1) IN X-DIRECTION
+      CALL MPE_2DTRANS(B,BT,A,NYMAX,NXMAX/NCPU,NCPU)
+
+      CALL FFTFAX(NXMOD,IFAX,TRIGSX)
+      CALL FFT991(A,WORK,TRIGSX,IFAX,1,NXMAX,NXMOD,NYMAX/NCPU,ISGN)
+      
+ 600  CONTINUE
+      RETURN
+      END
+
+
+C----------------------------------------------------------------------
+      SUBROUTINE FFTX_PARA(A,WORK,TRIGSX,IFAX,NXMOD,NXMAX,NYMAX,NCPU,
+     1                     ISGN)
+
+C     BY DI YANG 2005
+C     IF ISGN=-1, INPUT A(I,J) IN PHYSICAL DOMAIN. DO FFT TO A(I,J) IN X
+C     DIRECTION. OUTPUT A(I,J) IN SPECTRAL DOMAIN
+C     IF ISGN=1, INPUT A(I,J) IN SPECTRAL DOMAIN. DO INVERSE FFT TO A(I,J)
+C     IN Y DIRECTION. OUTPUT A(I,J) IN PHYSICAL DOMAIN.
+      
+      REAL WORK(*)
+      REAL TRIGSX(*)
+      INTEGER IFAX(*)
+      REAL A(NXMAX,*)
+      INTEGER ISGN
+      
+      IF(ISGN.EQ.1) GOTO 50
+      
+      DO J=1,NYMAX/NCPU
+         DO I=NXMOD+1,NXMAX
+            A(I,J)=0.0
+         ENDDO
+      ENDDO
+      
+ 50   CONTINUE
+      
+      
+      CALL FFTFAX(NXMOD,IFAX,TRIGSX)
+      CALL FFT991(A,WORK,TRIGSX,IFAX,1,NXMAX,NXMOD,NYMAX/NCPU,ISGN)
+      
+      RETURN
+      END
+
+
+C--------------------------------------------------------------------
+      SUBROUTINE FFTY_PARA(A,WORK,TRIGSY,IFAX,NYMOD,NXMAX,NYMAX,
+     1                      NCPU,ISGN)
+
+C     BY DI YANG 2005
+C     IF ISGN=-1, INPUT A(I,J) IN PHYSICAL DOMAIN. TRANSPOSE A(I,J) TO B(M,N).
+C     DO FFT TO B(M,N) IN X DIRECTION. TRANSPOSE B(M,N) BACK TO A(I,J). 
+C     OUTPUT A(I,J) IN SPECTRAL DOMAIN.
+C     IF ISGN=1, INPUT A(I,J) IN SPECTRAL DOMAIN. TRANSPOSE A(I,J) TO B(M,N).
+C     DO INVERSE FFT TO B(M,N) IN Y DIRECTION. TRANSPOSE B(M,N) BACK TO A(I,J).
+C     OUTPUT A(I,J) IN PHYSICAL DOMAIN.
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+      REAL WORK(*)
+      REAL TRIGSY(*)
+      INTEGER IFAX(*)
+      REAL A(NXMAX,NYMAX/NCPU),AT(NXMAX,NYMAX/NCPU)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      INTEGER ISGN
+      
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+
+      IF(ISGN.EQ.1) GOTO 50
+         
+      CALL MPE_2DTRANS(A,AT,B,NXMAX,NYMAX/NCPU,NCPU)
+      
+      DO J=1,NXMAX/NCPU
+         DO I=NYMOD+1,NYMAX
+            B(I,J) =0.0
+         ENDDO
+      ENDDO
+      
+      GOTO 100
+      
+ 50   CALL MPE_2DTRANS(A,AT,B,NXMAX,NYMAX/NCPU,NCPU)
+      
+ 100  CONTINUE
+      
+      CALL FFTFAX(NYMOD,IFAX,TRIGSY)
+      CALL FFT991(B,WORK,TRIGSY,IFAX,1,NYMAX,NYMOD,NXMAX/NCPU,ISGN)
+      
+      CALL MPE_2DTRANS(B,BT,A,NYMAX,NXMAX/NCPU,NCPU)
+      
+      RETURN
+      END
+
+
+C---------------------------------------------------------------------
+      SUBROUTINE FFTY_PARA2(A,B,WORK,TRIGSY,IFAX,NYMOD,NXMAX,
+     1                      NYMAX,NCPU,ISGN)
+
+C     BY DI YANG 2005
+C     IF ISGN=-1, INPUT A(I,J) IN PHYSICAL DOMAIN. TRANSPOSE A(I,J) TO B(M,N).
+C     DO FFT TO B(M,N) IN X DIRECTION. OUTPUT B(M,N) IN SPECTRAL DOMAIN. 
+C     IF ISGN=1, INPUT A(I,J) IN SPECTRAL DOMAIN. TRANSPOSE A(I,J) TO B(M,N).
+C     DO INVERSE FFT TO B(M,N) IN X DIRECTION. OUTPUT B(M,N) IN PHYSICAL 
+C     DOMAIN.
+      
+      INCLUDE "mpif.h"
+      
+      INTEGER MYID,NUMPROCS,IERR
+      REAL WORK(*)
+      REAL TRIGSY(*)
+      INTEGER IFAX(*)
+      REAL A(NXMAX,NYMAX/NCPU),AT(NXMAX,NYMAX/NCPU)
+      REAL ATMP(NXMAX,NYMAX/NCPU)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU) 
+      INTEGER ISGN
+
+
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+
+      IF(ISGN.EQ.1) GOTO 50
+      
+      CALL MPE_2DTRANS(A,AT,B,NXMAX,NYMAX/NCPU,NCPU)
+      
+      DO J=1,NXMAX/NCPU
+         DO I=NYMOD+1,NYMAX
+            B(I,J) =0.0
+         ENDDO
+      ENDDO
+      
+      GOTO 100
+      
+ 50   CALL MPE_2DTRANS(A,AT,B,NXMAX,NYMAX/NCPU,NCPU)
+      
+ 100  CONTINUE
+      
+      CALL FFTFAX(NYMOD,IFAX,TRIGSY)
+      CALL FFT991(B,WORK,TRIGSY,IFAX,1,NYMAX,NYMOD,NXMAX/NCPU,ISGN)
+      
+
+      RETURN
+      END
+      
+
+C---------------------------------------------------------------------
+      SUBROUTINE FFT1D_PARA(A,WORK,TRIGSX,TRIGSY,IFAX,NXMOD,NYMOD,NXMAX,
+     1                      NYMAX,NCPU,ISGN,IDIR)
+
+C     BY DI YANG 2005
+C     IF IDIR=1, DO OPERATION IN X DIRECTION. IF IDIR=2, DO OPERATION 
+C     IN Y DIRECTION.
+C     IF ISGN=-1, DO FFT TO A(I,J) IN REQUIRED DIRECTION. OUTPUT A(I,J) 
+C     IN SPECTRAL DOMAIN. IF ISGN=1, DO INVERSE FFT TO A(I,J) IN REQUIRED 
+C     DIRECTION. OUTPUT A(I,J) IN PHYSICAL DOMAIN.
+      
+      INCLUDE "mpif.h"
+
+      INTEGER MYID,NUMPROCS,IERR
+      REAL WORK(*)
+      REAL TRIGSX(*),TRIGSY(*)
+      INTEGER IFAX(*)
+      REAL A(NXMAX,NYMAX/NCPU),AT(NXMAX,NYMAX/NCPU)
+      REAL B(NYMAX,NXMAX/NCPU),BT(NYMAX,NXMAX/NCPU)
+      INTEGER ISGN,IDIR
+      
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+
+
+      IF(IDIR.EQ.1) THEN
+         
+         IF(ISGN.EQ.1) GOTO 50
+      
+         DO J=1,NYMAX/NCPU
+            DO I=NXMOD+1,NXMAX
+               A(I,J)=0.0
+            ENDDO
+         ENDDO
+         
+ 50      CONTINUE
+      
+         
+         CALL FFTFAX(NXMOD,IFAX,TRIGSX)
+         CALL FFT991(A,WORK,TRIGSX,IFAX,1,NXMAX,NXMOD,NYMAX/NCPU,ISGN)
+        
+      ELSE IF(IDIR.EQ.2) THEN
+         
+         IF(ISGN.EQ.1) GOTO 100
+         
+         CALL MPE_2DTRANS(A,AT,B,NXMAX,NYMAX/NCPU,NCPU)
+         
+         DO J=1,NXMAX/NCPU
+            DO I=NYMOD+1,NYMAX
+               B(I,J) =0.0
+            ENDDO
+         ENDDO
+         
+         GOTO 110
+         
+ 100     CALL MPE_2DTRANS(A,AT,B,NXMAX,NYMAX/NCPU,NCPU)
+         
+ 110     CONTINUE
+
+         CALL FFTFAX(NYMOD,IFAX,TRIGSY)
+         CALL FFT991(B,WORK,TRIGSY,IFAX,1,NYMAX,NYMOD,NXMAX/NCPU,ISGN)
+      
+         CALL MPE_2DTRANS(B,BT,A,NYMAX,NXMAX/NCPU,NCPU)
+
+
+      ELSE
+         WRITE(*,*) "DIR SHOULD BE 1 OR 2"
+         
+      ENDIF
+      
+ 555  RETURN
+      END
+
+      
+C------------------------------------------------------------------------
+      SUBROUTINE FFTXYZ_PARA(A,WORK,TRIGSX,TRIGSY,TRIGSZ,IFAX,NXMOD,
+     1     NYMOD,NZMOD,NXMAX,NYMAX,NZMAX,NCPU,ISGN)
+
+      INCLUDE "mpif.h"
+
+      INTEGER MYID,NUMPROCS,IERR
+      REAL WORK(*)
+      REAL TRIGSX(*),TRIGSY(*),TRIGSZ(*)
+      INTEGER IFAX(*)
+      REAL A(NXMAX,NYMAX/NCPU,*),AT(NXMAX,NYMAX/NCPU)
+      REAL B(NYMAX,NXMAX/NCPU,NZMAX),BT(NYMAX,NXMAX/NCPU)
+      INTEGER ISGN
+
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+
+      IF(ISGN.EQ.1) GOTO 50
+      
+      DO K=1,NZMAX
+         DO J=1,NYMAX/NCPU
+            DO I=NXMOD+1,NXMAX
+               A(I,J,K)=0.0
+            ENDDO
+         ENDDO
+      ENDDO
+
+      DO K=NZMOD+1,NZMAX
+         DO J=1,NYMAX/NCPU
+            DO I=1,NXMAX
+               A(I,J,K)=0.0
+            ENDDO
+         ENDDO
+      ENDDO
+      
+C     FFT(ISGN=-1) IN X-DIRECTION
+      CALL FFTFAX(NXMOD,IFAX,TRIGSX)
+      DO K=1,NZMOD
+         CALL FFT991(A(1,1,K),WORK,TRIGSX,IFAX,1,NXMAX,NXMOD,NYMAX/NCPU,
+     1        ISGN)         
+      ENDDO
+
+C     FFT(ISGN=-1) IN Y-DIRCTION      
+      CALL FFTFAX(NYMOD,IFAX,TRIGSY)
+      DO K=1,NZMOD
+         CALL MPE_2DTRANS(A(1,1,K),AT,B(1,1,K),NXMAX,NYMAX/NCPU,NCPU)
+         DO J=1,NXMAX/NCPU
+            DO I=NYMOD+1,NYMAX
+               B(I,J,K)=0.0
+            ENDDO
+         ENDDO  
+         CALL FFT991(B(1,1,K),WORK,TRIGSY,IFAX,1,NYMAX,NYMOD,NXMAX/NCPU,
+     1        ISGN)
+         CALL MPE_2DTRANS(B(1,1,K),BT,A(1,1,K),NYMAX,NXMAX/NCPU,NCPU)
+      ENDDO
+
+C     FFT(ISGN=-1) IN Z-DIRECTION
+      CALL FFTFAX(NZMOD,IFAX,TRIGSZ)
+      DO J=1,NYMAX/NCPU
+         CALL FFT991(A(1,J,1),WORK,TRIGSZ,IFAX,NXMAX*NYMAX/NCPU,1,NZMOD,
+     1        NXMAX,ISGN)
+      ENDDO
+
+      GOTO 600
+
+ 50   CONTINUE
+      
+C     INVERSE FFT(ISGN=1) IN Z-DIRECTION
+      CALL FFTFAX(NZMOD,IFAX,TRIGSZ)
+      DO J=1,NYMAX/NCPU
+         CALL FFT991(A(1,J,1),WORK,TRIGSZ,IFAX,NXMAX*NYMAX/NCPU,1,NZMOD,
+     1        NXMAX,ISGN)
+      ENDDO
+      
+C     INVERSE FFT(ISGN=1) IN Y-DIRECTION
+      CALL FFTFAX(NYMOD,IFAX,TRIGSY)
+      DO K=1,NZMOD
+         CALL MPE_2DTRANS(A(1,1,K),AT,B(1,1,K),NXMAX,NYMAX/NCPU,NCPU)
+         CALL FFT991(B(1,1,K),WORK,TRIGSY,IFAX,1,NYMAX,NYMOD,NXMAX/NCPU,
+     1        ISGN)
+      ENDDO
+      
+C     INVERSE FFT(ISGN=1) IN X-DIRECTION
+      CALL FFTFAX(NXMOD,IFAX,TRIGSX)
+      DO K=1,NZMOD
+         CALL MPE_2DTRANS(B(1,1,K),BT,A(1,1,K),NYMAX,NXMAX/NCPU,NCPU)
+         CALL FFT991(A(1,1,K),WORK,TRIGSX,IFAX,1,NXMAX,NXMOD,NYMAX/NCPU,
+     1        ISGN)
+      ENDDO
+      
+ 600  CONTINUE
+
+      RETURN
+      END
+      
+C----------------------------------------------------------------------      
+
+
+      SUBROUTINE MPE_2DTRANS(A,AT,B,NDX,NDY,NCPU)
+      
+C     BY DI YANG 2005
+C     INPUT ARRAY A(NDX,NDY). NDX AND NDY ARE THE NUMBERS OF POINTS
+C     IN X AND Y DIRECTION IN ONE PROCESSOR. NCPU IS THE NUMBER OF
+C     OF PROCESSORS IN COMPUTATION. OUTPUT B(NDY*NCPU,NDX/NCPU) WHICH 
+C     IS THE TRANSPOSE ARRAY OF A(NDX,NDY)
+      
+      IMPLICIT NONE
+      INCLUDE 'mpif.h'
+      INTEGER NDX,NDY,NCPU
+      REAL  A(NDX,NDY),AT(NDX,NDY),B(NDY*NCPU,NDX/NCPU)
+      
+      INTEGER NUMPROCS,IERR,MYID
+      INTEGER I,J,N
+      INTEGER NBB,NDYGLOB
+      INTEGER M1,N1,K1,M2,N2,K2,II
+      CHARACTER *10 FILENAME4
+    
+      CALL MPI_COMM_RANK(MPI_COMM_WORLD,MYID,IERR)
+      CALL MPI_COMM_SIZE(MPI_COMM_WORLD,NUMPROCS,IERR)
+      
+      NDYGLOB=NDY*NCPU
+      NBB=NDY*NDX/NCPU
+      
+      DO J=1,NDY
+         DO I=1,NDX
+            AT(I,J)=A(I,J)
+         ENDDO
+      ENDDO
+      
+      DO J=1,NDY
+         DO I=1,NDX
+            K1=J+(I-1)*NDY
+            K2=I+(J-1)*NDX
+            CALL GETIJ(M1,N1,K1,NDX)
+            CALL GETIJ(M2,N2,K2,NDX)
+            A(M1,N1)=AT(M2,N2)
+            AT(M2,N2)=0.
+         ENDDO
+      ENDDO
+
+
+      CALL MPI_ALLtoall(A,NBB,MPI_DOUBLE_PRECISION,
+     1                 AT,NBB,MPI_DOUBLE_PRECISION,
+     1                 MPI_COMM_WORLD,IERR)
+      
+      
+      DO J=1,NDX/NCPU
+         II=0
+         DO N=1,NUMPROCS
+            DO I=1,NDY
+               II=II+1
+               K1=II+(J-1)*NDYGLOB
+               K2=I+(N-1)*NBB+(J-1)*NDY
+               CALL GETIJ(M1,N1,K1,NDYGLOB)
+               CALL GETIJ(M2,N2,K2,NDX)
+               B(M1,N1)=AT(M2,N2)
+            ENDDO
+         ENDDO
+      ENDDO
+
+      RETURN
+      END
+
+
+
+C---------------------------------------------------
+
+      SUBROUTINE GETIJ(I,J,K,COLS)
+      
+C     INPUT THE OFFSET OF THE ELEMENT TO THE START LOCATION
+C     IN THE OLD ARRAY IN THE PHYSICAL MEMORY. INPUT THE 
+C     NUMBER OF COLUMNS IN THE NEW ARRAY. GET THE POSITION 
+C     (I,J) OF THE ELEMENT IN THE NEW ARRAY.
+      
+      INTEGER I,J,K,COLS
+      I=MOD(K-1,COLS)+1
+      J=(K-1)/COLS+1
+      RETURN
+      END
+
+C=====SUBROUTINES FOR SPECTRAL METHOD END HERE
+
+
+
+
+
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C     FFT PACKAGE
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+
+C===========================================================================
+C  Real FFTPACKTULT.F  29 January 1991
+C
+      SUBROUTINE FFT99(A,WORK,TRIGS,IFAX,INC,JUMP,N,LOT,ISIGN)
+C
+C PURPOSE      PERFORMS MULTIPLE FAST FOURIER TRANSFORMS.  THIS PACKAGE
+C              WILL PERFORM A NUMBER OF SIMULTANEOUS REAL/HALF-COMPLEX
+C              PERIODIC FOURIER TRANSFORMS OR CORRESPONDING INVERSE
+C              TRANSFORMS, I.E.  GIVEN A SET OF REAL DATA VECTORS, THE
+C              PACKAGE RETURNS A SET OF 'HALF-COMPLEX' FOURIER
+C              COEFFICIENT VECTORS, OR VICE VERSA.  THE LENGTH OF THE
+C              TRANSFORMS MUST BE AN EVEN NUMBER GREATER THAN 4 THAT HAS
+C              NO OTHER FACTORS EXCEPT POSSIBLY POWERS OF 2, 3, AND 5.
+C              THIS IS AN ALL FORTRAN VERSION OF THE CRAYLIB PACKAGE
+C              THAT IS MOSTLY WRITTEN IN CAL.
+C
+C              THE PACKAGE FFT99F CONTAINS SEVERAL USER-LEVEL ROUTINES:
+C
+C            SUBROUTINE FFTFAX
+C                AN INITIALIZATION ROUTINE THAT MUST BE CALLED ONCE
+C                BEFORE A SEQUENCE OF CALLS TO THE FFT ROUTINES
+C                (PROVIDED THAT N IS NOT CHANGED).
+C
+C            SUBROUTINES FFT99 AND FFT991
+C                TWO FFT ROUTINES THAT RETURN SLIGHTLY DIFFERENT
+C                ARRANGEMENTS OF THE DATA IN GRIDPOINT SPACE.
+C
+C
+C ACCESS       THIS FORTRAN VERSION MAY BE ACCESSED WITH
+C
+C                   *FORTRAN,P=XLIB,SN=FFT99F
+C
+C              TO ACCESS THE CRAY OBJECT CODE, CALLING THE USER ENTRY
+C              POINTS FROM A CRAY PROGRAM IS SUFFICIENT.  THE SOURCE
+C              FORTRAN AND CAL CODE FOR THE CRAYLIB VERSION MAY BE
+C              ACCESSED USING
+C
+C                   FETCH P=CRAYLIB,SN=FFT99
+C                   FETCH P=CRAYLIB,SN=CAL99
+C
+C USAGE        LET N BE OF THE FORM 2**P * 3**Q * 5**R, WHERE P .GE. 1,
+C              Q .GE. 0, AND R .GE. 0.  THEN A TYPICAL SEQUENCE OF
+C              CALLS TO TRANSFORM A GIVEN SET OF REAL VECTORS OF LENGTH
+C              N TO A SET OF 'HALF-COMPLEX' FOURIER COEFFICIENT VECTORS
+C              OF LENGTH N IS
+C
+C                   DIMENSION IFAX(13),TRIGS(3*N/2+1),A(M*(N+2)),
+C                  +          WORK(M*(N+1))
+C
+C                   CALL FFTFAX (N, IFAX, TRIGS)
+C                   CALL FFT99 (A,WORK,TRIGS,IFAX,INC,JUMP,N,M,ISIGN)
+C
+C              SEE THE INDIVIDUAL WRITE-UPS FOR FFTFAX, FFT99, AND
+C              FFT991 BELOW, FOR A DETAILED DESCRIPTION OF THE
+C              ARGUMENTS.
+C
+C HISTORY      THE PACKAGE WAS WRITTEN BY CLIVE TEMPERTON AT ECMWF IN
+C              NOVEMBER, 1978.  IT WAS MODIFIED, DOCUMENTED, AND TESTED
+C              FOR NCAR BY RUSS REW IN SEPTEMBER, 1980.
+C
+C-----------------------------------------------------------------------
+C
+C SUBROUTINE FFTFAX (N,IFAX,TRIGS)
+C
+C PURPOSE      A SET-UP ROUTINE FOR FFT99 AND FFT991.  IT NEED ONLY BE
+C              CALLED ONCE BEFORE A SEQUENCE OF CALLS TO THE FFT
+C              ROUTINES (PROVIDED THAT N IS NOT CHANGED).
+C
+C ARGUMENT     IFAX(13),TRIGS(3*N/2+1)
+C DIMENSIONS
+C
+C ARGUMENTS
+C
+C ON INPUT     N
+C               AN EVEN NUMBER GREATER THAN 4 THAT HAS NO PRIME FACTOR
+C               GREATER THAN 5.  N IS THE LENGTH OF THE TRANSFORMS (SEE
+C               THE DOCUMENTATION FOR FFT99 AND FFT991 FOR THE
+C               DEFINITIONS OF THE TRANSFORMS).
+C
+C              IFAX
+C               AN INTEGER ARRAY.  THE NUMBER OF ELEMENTS ACTUALLY USED
+C               WILL DEPEND ON THE FACTORIZATION OF N.  DIMENSIONING
+C               IFAX FOR 13 SUFFICES FOR ALL N LESS THAN A MILLION.
+C
+C              TRIGS
+C               A FLOATING POINT ARRAY OF DIMENSION 3*N/2 IF N/2 IS
+C               EVEN, OR 3*N/2+1 IF N/2 IS ODD.
+C
+C ON OUTPUT    IFAX
+C               CONTAINS THE FACTORIZATION OF N/2.  IFAX(1) IS THE
+C               NUMBER OF FACTORS, AND THE FACTORS THEMSELVES ARE STORED
+C               IN IFAX(2),IFAX(3),...  IF FFTFAX IS CALLED WITH N ODD,
+C               OR IF N HAS ANY PRIME FACTORS GREATER THAN 5, IFAX(1)
+C               IS SET TO -99.
+C
+C              TRIGS
+C               AN ARRAY OF TRIGNOMENTRIC FUNCTION VALUES SUBSEQUENTLY
+C               USED BY THE FFT ROUTINES.
+C
+C-----------------------------------------------------------------------
+C
+C SUBROUTINE FFT991 (A,WORK,TRIGS,IFAX,INC,JUMP,N,M,ISIGN)
+C                       AND
+C SUBROUTINE FFT99 (A,WORK,TRIGS,IFAX,INC,JUMP,N,M,ISIGN)
+C
+C PURPOSE      PERFORM A NUMBER OF SIMULTANEOUS REAL/HALF-COMPLEX
+C              PERIODIC FOURIER TRANSFORMS OR CORRESPONDING INVERSE
+C              TRANSFORMS, USING ORDINARY SPATIAL ORDER OF GRIDPOINT
+C              VALUES (FFT991) OR EXPLICIT CYCLIC CONTINUITY IN THE
+C              GRIDPOINT VALUES (FFT99).  GIVEN A SET
+C              OF REAL DATA VECTORS, THE PACKAGE RETURNS A SET OF
+C              'HALF-COMPLEX' FOURIER COEFFICIENT VECTORS, OR VICE
+C              VERSA.  THE LENGTH OF THE TRANSFORMS MUST BE AN EVEN
+C              NUMBER THAT HAS NO OTHER FACTORS EXCEPT POSSIBLY POWERS
+C              OF 2, 3, AND 5.  THESE VERSION OF FFT991 AND FFT99 ARE
+C              OPTIMIZED FOR USE ON THE CRAY-1.
+C
+C ARGUMENT     A(M*(N+2)), WORK(M*(N+1)), TRIGS(3*N/2+1), IFAX(13)
+C DIMENSIONS
+C
+C ARGUMENTS
+C
+C ON INPUT     A
+C               AN ARRAY OF LENGTH M*(N+2) CONTAINING THE INPUT DATA
+C               OR COEFFICIENT VECTORS.  THIS ARRAY IS OVERWRITTEN BY
+C               THE RESULTS.
+C
+C              WORK
+C               A WORK ARRAY OF DIMENSION M*(N+1)
+C
+C              TRIGS
+C               AN ARRAY SET UP BY FFTFAX, WHICH MUST BE CALLED FIRST.
+C
+C              IFAX
+C               AN ARRAY SET UP BY FFTFAX, WHICH MUST BE CALLED FIRST.
+C
+C              INC
+C               THE INCREMENT (IN WORDS) BETWEEN SUCCESSIVE ELEMENTS OF
+C               EACH DATA OR COEFFICIENT VECTOR (E.G.  INC=1 FOR
+C               CONSECUTIVELY STORED DATA).
+C
+C              JUMP
+C               THE INCREMENT (IN WORDS) BETWEEN THE FIRST ELEMENTS OF
+C               SUCCESSIVE DATA OR COEFFICIENT VECTORS.  ON THE CRAY-1,
+C               TRY TO ARRANGE DATA SO THAT JUMP IS NOT A MULTIPLE OF 8
+C               (TO AVOID MEMORY BANK CONFLICTS).  FOR CLARIFICATION OF
+C               INC AND JUMP, SEE THE EXAMPLES BELOW.
+C
+C              N
+C               THE LENGTH OF EACH TRANSFORM (SEE DEFINITION OF
+C               TRANSFORMS, BELOW).
+C
+C              M
+C               THE NUMBER OF TRANSFORMS TO BE DONE SIMULTANEOUSLY.
+C
+C              ISIGN
+C               = +1 FOR A TRANSFORM FROM FOURIER COEFFICIENTS TO
+C                    GRIDPOINT VALUES.
+C               = -1 FOR A TRANSFORM FROM GRIDPOINT VALUES TO FOURIER
+C                    COEFFICIENTS.
+C
+C ON OUTPUT    A
+C               IF ISIGN = +1, AND M COEFFICIENT VECTORS ARE SUPPLIED
+C               EACH CONTAINING THE SEQUENCE:
+C
+C               A(0),B(0),A(1),B(1),...,A(N/2),B(N/2)  (N+2 VALUES)
+C
+C               THEN THE RESULT CONSISTS OF M DATA VECTORS EACH
+C               CONTAINING THE CORRESPONDING N+2 GRIDPOINT VALUES:
+C
+C               FOR FFT991, X(0), X(1), X(2),...,X(N-1),0,0.
+C               FOR FFT99, X(N-1),X(0),X(1),X(2),...,X(N-1),X(0).
+C                   (EXPLICIT CYCLIC CONTINUITY)
+C
+C               WHEN ISIGN = +1, THE TRANSFORM IS DEFINED BY:
+C                 X(J)=SUM(K=0,...,N-1)(C(K)*EXP(2*I*J*K*PI/N))
+C                 WHERE C(K)=A(K)+I*B(K) AND C(N-K)=A(K)-I*B(K)
+C                 AND I=SQRT (-1)
+C
+C               IF ISIGN = -1, AND M DATA VECTORS ARE SUPPLIED EACH
+C               CONTAINING A SEQUENCE OF GRIDPOINT VALUES X(J) AS
+C               DEFINED ABOVE, THEN THE RESULT CONSISTS OF M VECTORS
+C               EACH CONTAINING THE CORRESPONDING FOURIER COFFICIENTS
+C               A(K), B(K), 0 .LE. K .LE N/2.
+C
+C               WHEN ISIGN = -1, THE INVERSE TRANSFORM IS DEFINED BY:
+C                 C(K)=(1/N)*SUM(J=0,...,N-1)(X(J)*EXP(-2*I*J*K*PI/N))
+C                 WHERE C(K)=A(K)+I*B(K) AND I=SQRT(-1)
+C
+C               A CALL WITH ISIGN=+1 FOLLOWED BY A CALL WITH ISIGN=-1
+C               (OR VICE VERSA) RETURNS THE ORIGINAL DATA.
+C
+C               NOTE: THE FACT THAT THE GRIDPOINT VALUES X(J) ARE REAL
+C               IMPLIES THAT B(0)=B(N/2)=0.  FOR A CALL WITH ISIGN=+1,
+C               IT IS NOT ACTUALLY NECESSARY TO SUPPLY THESE ZEROS.
+C
+C EXAMPLES      GIVEN 19 DATA VECTORS EACH OF LENGTH 64 (+2 FOR EXPLICIT
+C               CYCLIC CONTINUITY), COMPUTE THE CORRESPONDING VECTORS OF
+C               FOURIER COEFFICIENTS.  THE DATA MAY, FOR EXAMPLE, BE
+C               ARRANGED LIKE THIS:
+C
+C FIRST DATA   A(1)=    . . .                A(66)=             A(70)
+C VECTOR       X(63) X(0) X(1) X(2) ... X(63) X(0)  (4 EMPTY LOCATIONS)
+C
+C SECOND DATA  A(71)=   . . .                                  A(140)
+C VECTOR       X(63) X(0) X(1) X(2) ... X(63) X(0)  (4 EMPTY LOCATIONS)
+C
+C               AND SO ON.  HERE INC=1, JUMP=70, N=64, M=19, ISIGN=-1,
+C               AND FFT99 SHOULD BE USED (BECAUSE OF THE EXPLICIT CYCLIC
+C               CONTINUITY).
+C
+C               ALTERNATIVELY THE DATA MAY BE ARRANGED LIKE THIS:
+C
+C                FIRST         SECOND                          LAST
+C                DATA          DATA                            DATA
+C                VECTOR        VECTOR                          VECTOR
+C
+C                 A(1)=         A(2)=                           A(19)=
+C
+C                 X(63)         X(63)       . . .               X(63)
+C        A(20)=   X(0)          X(0)        . . .               X(0)
+C        A(39)=   X(1)          X(1)        . . .               X(1)
+C                  .             .                               .
+C                  .             .                               .
+C                  .             .                               .
+C
+C               IN WHICH CASE WE HAVE INC=19, JUMP=1, AND THE REMAINING
+C               PARAMETERS ARE THE SAME AS BEFORE.  IN EITHER CASE, EACH
+C               COEFFICIENT VECTOR OVERWRITES THE CORRESPONDING INPUT
+C               DATA VECTOR.
+C
+C-----------------------------------------------------------------------
+      DIMENSION A(N),WORK(N),TRIGS(N),IFAX(1)
+C
+C     SUBROUTINE "FFT99" - MULTIPLE FAST REAL PERIODIC TRANSFORM
+C     CORRESPONDING TO OLD SCALAR ROUTINE FFT9
+C     PROCEDURE USED TO CONVERT TO HALF-LENGTH COMPLEX TRANSFORM
+C     IS GIVEN BY COOLEY, LEWIS AND WELCH (J. SOUND VIB., VOL. 12
+C     (1970), 315-337)
+C
+C     A IS THE ARRAY CONTAINING INPUT AND OUTPUT DATA
+C     WORK IS AN AREA OF SIZE (N+1)*LOT
+C     TRIGS IS A PREVIOUSLY PREPARED LIST OF TRIG FUNCTION VALUES
+C     IFAX IS A PREVIOUSLY PREPARED LIST OF FACTORS OF N/2
+C     INC IS THE INCREMENT WITHIN EACH DATA 'VECTOR'
+C         (E.G. INC=1 FOR CONSECUTIVELY STORED DATA)
+C     JUMP IS THE INCREMENT BETWEEN THE START OF EACH DATA VECTOR
+C     N IS THE LENGTH OF THE DATA VECTORS
+C     LOT IS THE NUMBER OF DATA VECTORS
+C     ISIGN = +1 FOR TRANSFORM FROM SPECTRAL TO GRIDPOINT
+C           = -1 FOR TRANSFORM FROM GRIDPOINT TO SPECTRAL
+C
+C     ORDERING OF COEFFICIENTS:
+C         A(0),B(0),A(1),B(1),A(2),B(2),...,A(N/2),B(N/2)
+C         WHERE B(0)=B(N/2)=0; (N+2) LOCATIONS REQUIRED
+C
+C     ORDERING OF DATA:
+C         X(N-1),X(0),X(1),X(2),...,X(N),X(0)
+C         I.E. EXPLICIT CYCLIC CONTINUITY; (N+2) LOCATIONS REQUIRED
+C
+C     VECTORIZATION IS ACHIEVED ON CRAY BY DOING THE TRANSFORMS IN
+C     PARALLEL
+C
+C     *** N.B. N IS ASSUMED TO BE AN EVEN NUMBER
+C
+C     DEFINITION OF TRANSFORMS:
+C     -------------------------
+C
+C     ISIGN=+1: X(J)=SUM(K=0,...,N-1)(C(K)*EXP(2*I*J*K*PI/N))
+C         WHERE C(K)=A(K)+I*B(K) AND C(N-K)=A(K)-I*B(K)
+C
+C     ISIGN=-1: A(K)=(1/N)*SUM(J=0,...,N-1)(X(J)*COS(2*J*K*PI/N))
+C               B(K)=-(1/N)*SUM(J=0,...,N-1)(X(J)*SIN(2*J*K*PI/N))
+C
+C
+      NFAX=IFAX(1)
+      NX=N+1
+      NH=N/2
+      INK=INC+INC
+      IF (ISIGN.EQ.+1) GO TO 30
+C
+C     IF NECESSARY, TRANSFER DATA TO WORK AREA
+      IGO=50
+      IF (MOD(NFAX,2).EQ.1) GOTO 40
+      IBASE=INC+1
+      JBASE=1
+      DO 20 L=1,LOT
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 10 M=1,N
+      WORK(J)=A(I)
+      I=I+INC
+      J=J+1
+   10 CONTINUE
+      IBASE=IBASE+JUMP
+      JBASE=JBASE+NX
+   20 CONTINUE
+C
+      IGO=60
+      GO TO 40
+C
+C     PREPROCESSING (ISIGN=+1)
+C     ------------------------
+C
+   30 CONTINUE
+      CALL FFT99A(A,WORK,TRIGS,INC,JUMP,N,LOT)
+      IGO=60
+C
+C     COMPLEX TRANSFORM
+C     -----------------
+C
+   40 CONTINUE
+      IA=INC+1
+      LA=1
+      DO 80 K=1,NFAX
+      IF (IGO.EQ.60) GO TO 60
+   50 CONTINUE
+      CALL VPASSM(A(IA),A(IA+INC),WORK(1),WORK(2),TRIGS,
+     *   INK,2,JUMP,NX,LOT,NH,IFAX(K+1),LA)
+      IGO=60
+      GO TO 70
+   60 CONTINUE
+      CALL VPASSM(WORK(1),WORK(2),A(IA),A(IA+INC),TRIGS,
+     *    2,INK,NX,JUMP,LOT,NH,IFAX(K+1),LA)
+      IGO=50
+   70 CONTINUE
+      LA=LA*IFAX(K+1)
+   80 CONTINUE
+C
+      IF (ISIGN.EQ.-1) GO TO 130
+C
+C     IF NECESSARY, TRANSFER DATA FROM WORK AREA
+      IF (MOD(NFAX,2).EQ.1) GO TO 110
+      IBASE=1
+      JBASE=IA
+      DO 100 L=1,LOT
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 90 M=1,N
+      A(J)=WORK(I)
+      I=I+1
+      J=J+INC
+   90 CONTINUE
+      IBASE=IBASE+NX
+      JBASE=JBASE+JUMP
+  100 CONTINUE
+C
+C     FILL IN CYCLIC BOUNDARY POINTS
+  110 CONTINUE
+      IA=1
+      IB=N*INC+1
+CDIR$ IVDEP
+      DO 120 L=1,LOT
+      A(IA)=A(IB)
+      A(IB+INC)=A(IA+INC)
+      IA=IA+JUMP
+      IB=IB+JUMP
+  120 CONTINUE
+      GO TO 140
+C
+C     POSTPROCESSING (ISIGN=-1):
+C     --------------------------
+C
+  130 CONTINUE
+      CALL FFT99B(WORK,A,TRIGS,INC,JUMP,N,LOT)
+C
+  140 CONTINUE
+      RETURN
+      END
+C---------------------------------------------------------------C
+      SUBROUTINE FFT99A(A,WORK,TRIGS,INC,JUMP,N,LOT)
+      DIMENSION A(N),WORK(N),TRIGS(N)
+C
+C     SUBROUTINE FFT99A - PREPROCESSING STEP FOR FFT99, ISIGN=+1
+C     (SPECTRAL TO GRIDPOINT TRANSFORM)
+C
+      NH=N/2
+      NX=N+1
+      INK=INC+INC
+C
+C     A(0) AND A(N/2)
+      IA=1
+      IB=N*INC+1
+      JA=1
+      JB=2
+CDIR$ IVDEP
+      DO 10 L=1,LOT
+      WORK(JA)=A(IA)+A(IB)
+      WORK(JB)=A(IA)-A(IB)
+      IA=IA+JUMP
+      IB=IB+JUMP
+      JA=JA+NX
+      JB=JB+NX
+   10 CONTINUE
+C
+C     REMAINING WAVENUMBERS
+      IABASE=2*INC+1
+      IBBASE=(N-2)*INC+1
+      JABASE=3
+      JBBASE=N-1
+C
+      DO 30 K=3,NH,2
+      IA=IABASE
+      IB=IBBASE
+      JA=JABASE
+      JB=JBBASE
+      C=TRIGS(N+K)
+      S=TRIGS(N+K+1)
+CDIR$ IVDEP
+      DO 20 L=1,LOT
+      WORK(JA)=(A(IA)+A(IB))-
+     *    (S*(A(IA)-A(IB))+C*(A(IA+INC)+A(IB+INC)))
+      WORK(JB)=(A(IA)+A(IB))+
+     *    (S*(A(IA)-A(IB))+C*(A(IA+INC)+A(IB+INC)))
+      WORK(JA+1)=(C*(A(IA)-A(IB))-S*(A(IA+INC)+A(IB+INC)))+
+     *    (A(IA+INC)-A(IB+INC))
+      WORK(JB+1)=(C*(A(IA)-A(IB))-S*(A(IA+INC)+A(IB+INC)))-
+     *    (A(IA+INC)-A(IB+INC))
+      IA=IA+JUMP
+      IB=IB+JUMP
+      JA=JA+NX
+      JB=JB+NX
+   20 CONTINUE
+      IABASE=IABASE+INK
+      IBBASE=IBBASE-INK
+      JABASE=JABASE+2
+      JBBASE=JBBASE-2
+   30 CONTINUE
+C
+      IF (IABASE.NE.IBBASE) GO TO 50
+C     WAVENUMBER N/4 (IF IT EXISTS)
+      IA=IABASE
+      JA=JABASE
+CDIR$ IVDEP
+      DO 40 L=1,LOT
+      WORK(JA)=2.0*A(IA)
+      WORK(JA+1)=-2.0*A(IA+INC)
+      IA=IA+JUMP
+      JA=JA+NX
+   40 CONTINUE
+C
+   50 CONTINUE
+      RETURN
+      END
+C---------------------------------------------------------------C
+      SUBROUTINE FFT99B(WORK,A,TRIGS,INC,JUMP,N,LOT)
+      DIMENSION WORK(N),A(N),TRIGS(N)
+C
+C     SUBROUTINE FFT99B - POSTPROCESSING STEP FOR FFT99, ISIGN=-1
+C     (GRIDPOINT TO SPECTRAL TRANSFORM)
+C
+      NH=N/2
+      NX=N+1
+      INK=INC+INC
+C
+C     A(0) AND A(N/2)
+      SCALE=1.0/FLOAT(N)
+      IA=1
+      IB=2
+      JA=1
+      JB=N*INC+1
+CDIR$ IVDEP
+      DO 10 L=1,LOT
+      A(JA)=SCALE*(WORK(IA)+WORK(IB))
+      A(JB)=SCALE*(WORK(IA)-WORK(IB))
+      A(JA+INC)=0.0
+      A(JB+INC)=0.0
+      IA=IA+NX
+      IB=IB+NX
+      JA=JA+JUMP
+      JB=JB+JUMP
+   10 CONTINUE
+C
+C     REMAINING WAVENUMBERS
+      SCALE=0.5*SCALE
+      IABASE=3
+      IBBASE=N-1
+      JABASE=2*INC+1
+      JBBASE=(N-2)*INC+1
+C
+      DO 30 K=3,NH,2
+      IA=IABASE
+      IB=IBBASE
+      JA=JABASE
+      JB=JBBASE
+      C=TRIGS(N+K)
+      S=TRIGS(N+K+1)
+CDIR$ IVDEP
+      DO 20 L=1,LOT
+      A(JA)=SCALE*((WORK(IA)+WORK(IB))
+     *   +(C*(WORK(IA+1)+WORK(IB+1))+S*(WORK(IA)-WORK(IB))))
+      A(JB)=SCALE*((WORK(IA)+WORK(IB))
+     *   -(C*(WORK(IA+1)+WORK(IB+1))+S*(WORK(IA)-WORK(IB))))
+      A(JA+INC)=SCALE*((C*(WORK(IA)-WORK(IB))-S*(WORK(IA+1)+WORK(IB+1)))
+     *    +(WORK(IB+1)-WORK(IA+1)))
+      A(JB+INC)=SCALE*((C*(WORK(IA)-WORK(IB))-S*(WORK(IA+1)+WORK(IB+1)))
+     *    -(WORK(IB+1)-WORK(IA+1)))
+      IA=IA+NX
+      IB=IB+NX
+      JA=JA+JUMP
+      JB=JB+JUMP
+   20 CONTINUE
+      IABASE=IABASE+2
+      IBBASE=IBBASE-2
+      JABASE=JABASE+INK
+      JBBASE=JBBASE-INK
+   30 CONTINUE
+C
+      IF (IABASE.NE.IBBASE) GO TO 50
+C     WAVENUMBER N/4 (IF IT EXISTS)
+      IA=IABASE
+      JA=JABASE
+      SCALE=2.0*SCALE
+CDIR$ IVDEP
+      DO 40 L=1,LOT
+      A(JA)=SCALE*WORK(IA)
+      A(JA+INC)=-SCALE*WORK(IA+1)
+      IA=IA+NX
+      JA=JA+JUMP
+   40 CONTINUE
+C
+   50 CONTINUE
+      RETURN
+      END
+C---------------------------------------------------------------C
+      SUBROUTINE FFT991(A,WORK,TRIGS,IFAX,INC,JUMP,N,LOT,ISIGN)
+      DIMENSION A(N),WORK(N),TRIGS(N),IFAX(1)
+C
+C     SUBROUTINE "FFT991" - MULTIPLE REAL/HALF-COMPLEX PERIODIC
+C     FAST FOURIER TRANSFORM
+C
+C     SAME AS FFT99 EXCEPT THAT ORDERING OF DATA CORRESPONDS TO
+C     THAT IN MRFFT2
+C
+C     PROCEDURE USED TO CONVERT TO HALF-LENGTH COMPLEX TRANSFORM
+C     IS GIVEN BY COOLEY, LEWIS AND WELCH (J. SOUND VIB., VOL. 12
+C     (1970), 315-337)
+C
+C     A IS THE ARRAY CONTAINING INPUT AND OUTPUT DATA
+C     WORK IS AN AREA OF SIZE (N+1)*LOT
+C     TRIGS IS A PREVIOUSLY PREPARED LIST OF TRIG FUNCTION VALUES
+C     IFAX IS A PREVIOUSLY PREPARED LIST OF FACTORS OF N/2
+C     INC IS THE INCREMENT WITHIN EACH DATA 'VECTOR'
+C         (E.G. INC=1 FOR CONSECUTIVELY STORED DATA)
+C     JUMP IS THE INCREMENT BETWEEN THE START OF EACH DATA VECTOR
+C     N IS THE LENGTH OF THE DATA VECTORS
+C     LOT IS THE NUMBER OF DATA VECTORS
+C     ISIGN = +1 FOR TRANSFORM FROM SPECTRAL TO GRIDPOINT
+C           = -1 FOR TRANSFORM FROM GRIDPOINT TO SPECTRAL
+C
+C     ORDERING OF COEFFICIENTS:
+C         A(0),B(0),A(1),B(1),A(2),B(2),...,A(N/2),B(N/2)
+C         WHERE B(0)=B(N/2)=0; (N+2) LOCATIONS REQUIRED
+C
+C     ORDERING OF DATA:
+C         X(0),X(1),X(2),...,X(N-1)
+C
+C     VECTORIZATION IS ACHIEVED ON CRAY BY DOING THE TRANSFORMS IN
+C     PARALLEL
+C
+C     *** N.B. N IS ASSUMED TO BE AN EVEN NUMBER
+C
+C     DEFINITION OF TRANSFORMS:
+C     -------------------------
+C
+C     ISIGN=+1: X(J)=SUM(K=0,...,N-1)(C(K)*EXP(2*I*J*K*PI/N))
+C         WHERE C(K)=A(K)+I*B(K) AND C(N-K)=A(K)-I*B(K)
+C
+C     ISIGN=-1: A(K)=(1/N)*SUM(J=0,...,N-1)(X(J)*COS(2*J*K*PI/N))
+C               B(K)=-(1/N)*SUM(J=0,...,N-1)(X(J)*SIN(2*J*K*PI/N))
+C
+      NFAX=IFAX(1)
+      NX=N+1
+      NH=N/2
+      INK=INC+INC
+      IF (ISIGN.EQ.+1) GO TO 30
+C
+C     IF NECESSARY, TRANSFER DATA TO WORK AREA
+      IGO=50
+      IF (MOD(NFAX,2).EQ.1) GOTO 40
+      IBASE=1
+      JBASE=1
+      DO 20 L=1,LOT
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 10 M=1,N
+      WORK(J)=A(I)
+      I=I+INC
+      J=J+1
+   10 CONTINUE
+      IBASE=IBASE+JUMP
+      JBASE=JBASE+NX
+   20 CONTINUE
+C
+      IGO=60
+      GO TO 40
+C
+C     PREPROCESSING (ISIGN=+1)
+C     ------------------------
+C
+   30 CONTINUE
+      CALL FFT99A(A,WORK,TRIGS,INC,JUMP,N,LOT)
+      IGO=60
+C
+C     COMPLEX TRANSFORM
+C     -----------------
+C
+   40 CONTINUE
+      IA=1
+      LA=1
+      DO 80 K=1,NFAX
+      IF (IGO.EQ.60) GO TO 60
+   50 CONTINUE
+      CALL VPASSM(A(IA),A(IA+INC),WORK(1),WORK(2),TRIGS,
+     *   INK,2,JUMP,NX,LOT,NH,IFAX(K+1),LA)
+      IGO=60
+      GO TO 70
+   60 CONTINUE
+      CALL VPASSM(WORK(1),WORK(2),A(IA),A(IA+INC),TRIGS,
+     *    2,INK,NX,JUMP,LOT,NH,IFAX(K+1),LA)
+      IGO=50
+   70 CONTINUE
+      LA=LA*IFAX(K+1)
+   80 CONTINUE
+C
+      IF (ISIGN.EQ.-1) GO TO 130
+C
+C     IF NECESSARY, TRANSFER DATA FROM WORK AREA
+      IF (MOD(NFAX,2).EQ.1) GO TO 110
+      IBASE=1
+      JBASE=1
+      DO 100 L=1,LOT
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 90 M=1,N
+      A(J)=WORK(I)
+      I=I+1
+      J=J+INC
+   90 CONTINUE
+      IBASE=IBASE+NX
+      JBASE=JBASE+JUMP
+  100 CONTINUE
+C
+C     FILL IN ZEROS AT END
+  110 CONTINUE
+      IB=N*INC+1
+CDIR$ IVDEP
+      DO 120 L=1,LOT
+      A(IB)=0.0
+      A(IB+INC)=0.0
+      IB=IB+JUMP
+  120 CONTINUE
+      GO TO 140
+C
+C     POSTPROCESSING (ISIGN=-1):
+C     --------------------------
+C
+  130 CONTINUE
+      CALL FFT99B(WORK,A,TRIGS,INC,JUMP,N,LOT)
+C
+  140 CONTINUE
+      RETURN
+      END
+C---------------------------------------------------------------C
+      SUBROUTINE FFTFAX(N,IFAX,TRIGS)
+      DIMENSION IFAX(13),TRIGS(1)
+C
+C MODE 3 IS USED FOR REAL/HALF-COMPLEX TRANSFORMS.  IT IS POSSIBLE
+C TO DO COMPLEX/COMPLEX TRANSFORMS WITH OTHER VALUES OF MODE, BUT
+C DOCUMENTATION OF THE DETAILS WERE NOT AVAILABLE WHEN THIS ROUTINE
+C WAS WRITTEN.
+C
+      DATA MODE /3/
+      CALL FAX (IFAX, N, MODE)
+      I = IFAX(1)
+      IF (IFAX(I+1) .GT. 5 .OR. N .LE. 4) IFAX(1) = -99
+      IF (IFAX(1) .LE. 0 )THEN
+        WRITE(*,1900)N
+1900    FORMAT(' FFTFAX - Invalid N=',I20)
+        RETURN
+        ENDIF
+      CALL FFTRIG (TRIGS, N, MODE)
+      RETURN
+      END
+C---------------------------------------------------------------C
+      SUBROUTINE FAX(IFAX,N,MODE)
+      DIMENSION IFAX(10)
+      NN=N
+      IF (IABS(MODE).EQ.1) GO TO 10
+      IF (IABS(MODE).EQ.8) GO TO 10
+      NN=N/2
+      IF ((NN+NN).EQ.N) GO TO 10
+      IFAX(1)=-99
+      RETURN
+   10 K=1
+C     TEST FOR FACTORS OF 4
+   20 IF (MOD(NN,4).NE.0) GO TO 30
+      K=K+1
+      IFAX(K)=4
+      NN=NN/4
+      IF (NN.EQ.1) GO TO 80
+      GO TO 20
+C     TEST FOR EXTRA FACTOR OF 2
+   30 IF (MOD(NN,2).NE.0) GO TO 40
+      K=K+1
+      IFAX(K)=2
+      NN=NN/2
+      IF (NN.EQ.1) GO TO 80
+C     TEST FOR FACTORS OF 3
+   40 IF (MOD(NN,3).NE.0) GO TO 50
+      K=K+1
+      IFAX(K)=3
+      NN=NN/3
+      IF (NN.EQ.1) GO TO 80
+      GO TO 40
+C     NOW FIND REMAINING FACTORS
+   50 L=5
+      INC=2
+C     INC ALTERNATELY TAKES ON VALUES 2 AND 4
+   60 IF (MOD(NN,L).NE.0) GO TO 70
+      K=K+1
+      IFAX(K)=L
+      NN=NN/L
+      IF (NN.EQ.1) GO TO 80
+      GO TO 60
+   70 L=L+INC
+      INC=6-INC
+      GO TO 60
+   80 IFAX(1)=K-1
+C     IFAX(1) CONTAINS NUMBER OF FACTORS
+      NFAX=IFAX(1)
+C     SORT FACTORS INTO ASCENDING ORDER
+      IF (NFAX.EQ.1) GO TO 110
+      DO 100 II=2,NFAX
+      ISTOP=NFAX+2-II
+      DO 90 I=2,ISTOP
+      IF (IFAX(I+1).GE.IFAX(I)) GO TO 90
+      ITEM=IFAX(I)
+      IFAX(I)=IFAX(I+1)
+      IFAX(I+1)=ITEM
+   90 CONTINUE
+  100 CONTINUE
+  110 CONTINUE
+      RETURN
+      END
+C---------------------------------------------------------------C
+      SUBROUTINE FFTRIG(TRIGS,N,MODE)
+      DIMENSION TRIGS(1)
+      PI=2.0*ASIN(1.0)
+      IMODE=IABS(MODE)
+      NN=N
+      IF (IMODE.GT.1.AND.IMODE.LT.6) NN=N/2
+      DEL=(PI+PI)/FLOAT(NN)
+      L=NN+NN
+      DO 10 I=1,L,2
+      ANGLE=0.5*FLOAT(I-1)*DEL
+      TRIGS(I)=COS(ANGLE)
+      TRIGS(I+1)=SIN(ANGLE)
+   10 CONTINUE
+      IF (IMODE.EQ.1) RETURN
+      IF (IMODE.EQ.8) RETURN
+      DEL=0.5*DEL
+      NH=(NN+1)/2
+      L=NH+NH
+      LA=NN+NN
+      DO 20 I=1,L,2
+      ANGLE=0.5*FLOAT(I-1)*DEL
+      TRIGS(LA+I)=COS(ANGLE)
+      TRIGS(LA+I+1)=SIN(ANGLE)
+   20 CONTINUE
+      IF (IMODE.LE.3) RETURN
+      DEL=0.5*DEL
+      LA=LA+NN
+      IF (MODE.EQ.5) GO TO 40
+      DO 30 I=2,NN
+      ANGLE=FLOAT(I-1)*DEL
+      TRIGS(LA+I)=2.0*SIN(ANGLE)
+   30 CONTINUE
+      RETURN
+   40 CONTINUE
+      DEL=0.5*DEL
+      DO 50 I=2,N
+      ANGLE=FLOAT(I-1)*DEL
+      TRIGS(LA+I)=SIN(ANGLE)
+   50 CONTINUE
+      RETURN
+      END
+      SUBROUTINE VPASSM(A,B,C,D,TRIGS,INC1,INC2,INC3,INC4,LOT,N,IFAC,LA)
+      DIMENSION A(N),B(N),C(N),D(N),TRIGS(N)
+C
+C     SUBROUTINE "VPASSM" - MULTIPLE VERSION OF "VPASSA"
+C     PERFORMS ONE PASS THROUGH DATA
+C     AS PART OF MULTIPLE COMPLEX FFT ROUTINE
+C     A IS FIRST REAL INPUT VECTOR
+C     B IS FIRST IMAGINARY INPUT VECTOR
+C     C IS FIRST REAL OUTPUT VECTOR
+C     D IS FIRST IMAGINARY OUTPUT VECTOR
+C     TRIGS IS PRECALCULATED TABLE OF SINES " COSINES
+C     INC1 IS ADDRESSING INCREMENT FOR A AND B
+C     INC2 IS ADDRESSING INCREMENT FOR C AND D
+C     INC3 IS ADDRESSING INCREMENT BETWEEN A"S & B"S
+C     INC4 IS ADDRESSING INCREMENT BETWEEN C"S & D"S
+C     LOT IS THE NUMBER OF VECTORS
+C     N IS LENGTH OF VECTORS
+C     IFAC IS CURRENT FACTOR OF N
+C     LA IS PRODUCT OF PREVIOUS FACTORS
+C
+      DATA SIN36/0.587785252292473/,COS36/0.809016994374947/,
+     *     SIN72/0.951056516295154/,COS72/0.309016994374947/,
+     *     SIN60/0.866025403784437/
+C
+      M=N/IFAC
+      IINK=M*INC1
+      JINK=LA*INC2
+      JUMP=(IFAC-1)*JINK
+      IBASE=0
+      JBASE=0
+      IGO=IFAC-1
+      IF (IGO.GT.4) RETURN
+      GO TO (10,50,90,130),IGO
+C
+C     CODING FOR FACTOR 2
+C
+   10 IA=1
+      JA=1
+      IB=IA+IINK
+      JB=JA+JINK
+      DO 20 L=1,LA
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 15 IJK=1,LOT
+      C(JA+J)=A(IA+I)+A(IB+I)
+      D(JA+J)=B(IA+I)+B(IB+I)
+      C(JB+J)=A(IA+I)-A(IB+I)
+      D(JB+J)=B(IA+I)-B(IB+I)
+      I=I+INC3
+      J=J+INC4
+   15 CONTINUE
+      IBASE=IBASE+INC1
+      JBASE=JBASE+INC2
+   20 CONTINUE
+      IF (LA.EQ.M) RETURN
+      LA1=LA+1
+      JBASE=JBASE+JUMP
+      DO 40 K=LA1,M,LA
+      KB=K+K-2
+      C1=TRIGS(KB+1)
+      S1=TRIGS(KB+2)
+      DO 30 L=1,LA
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 25 IJK=1,LOT
+      C(JA+J)=A(IA+I)+A(IB+I)
+      D(JA+J)=B(IA+I)+B(IB+I)
+      C(JB+J)=C1*(A(IA+I)-A(IB+I))-S1*(B(IA+I)-B(IB+I))
+      D(JB+J)=S1*(A(IA+I)-A(IB+I))+C1*(B(IA+I)-B(IB+I))
+      I=I+INC3
+      J=J+INC4
+   25 CONTINUE
+      IBASE=IBASE+INC1
+      JBASE=JBASE+INC2
+   30 CONTINUE
+      JBASE=JBASE+JUMP
+   40 CONTINUE
+      RETURN
+C
+C     CODING FOR FACTOR 3
+C
+   50 IA=1
+      JA=1
+      IB=IA+IINK
+      JB=JA+JINK
+      IC=IB+IINK
+      JC=JB+JINK
+      DO 60 L=1,LA
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 55 IJK=1,LOT
+      C(JA+J)=A(IA+I)+(A(IB+I)+A(IC+I))
+      D(JA+J)=B(IA+I)+(B(IB+I)+B(IC+I))
+      C(JB+J)=(A(IA+I)-0.5*(A(IB+I)+A(IC+I)))-(SIN60*(B(IB+I)-B(IC+I)))
+      C(JC+J)=(A(IA+I)-0.5*(A(IB+I)+A(IC+I)))+(SIN60*(B(IB+I)-B(IC+I)))
+      D(JB+J)=(B(IA+I)-0.5*(B(IB+I)+B(IC+I)))+(SIN60*(A(IB+I)-A(IC+I)))
+      D(JC+J)=(B(IA+I)-0.5*(B(IB+I)+B(IC+I)))-(SIN60*(A(IB+I)-A(IC+I)))
+      I=I+INC3
+      J=J+INC4
+   55 CONTINUE
+      IBASE=IBASE+INC1
+      JBASE=JBASE+INC2
+   60 CONTINUE
+      IF (LA.EQ.M) RETURN
+      LA1=LA+1
+      JBASE=JBASE+JUMP
+      DO 80 K=LA1,M,LA
+      KB=K+K-2
+      KC=KB+KB
+      C1=TRIGS(KB+1)
+      S1=TRIGS(KB+2)
+      C2=TRIGS(KC+1)
+      S2=TRIGS(KC+2)
+      DO 70 L=1,LA
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 65 IJK=1,LOT
+      C(JA+J)=A(IA+I)+(A(IB+I)+A(IC+I))
+      D(JA+J)=B(IA+I)+(B(IB+I)+B(IC+I))
+      C(JB+J)=
+     *    C1*((A(IA+I)-0.5*(A(IB+I)+A(IC+I)))-(SIN60*(B(IB+I)-B(IC+I))))
+     *   -S1*((B(IA+I)-0.5*(B(IB+I)+B(IC+I)))+(SIN60*(A(IB+I)-A(IC+I))))
+      D(JB+J)=
+     *    S1*((A(IA+I)-0.5*(A(IB+I)+A(IC+I)))-(SIN60*(B(IB+I)-B(IC+I))))
+     *   +C1*((B(IA+I)-0.5*(B(IB+I)+B(IC+I)))+(SIN60*(A(IB+I)-A(IC+I))))
+      C(JC+J)=
+     *    C2*((A(IA+I)-0.5*(A(IB+I)+A(IC+I)))+(SIN60*(B(IB+I)-B(IC+I))))
+     *   -S2*((B(IA+I)-0.5*(B(IB+I)+B(IC+I)))-(SIN60*(A(IB+I)-A(IC+I))))
+      D(JC+J)=
+     *    S2*((A(IA+I)-0.5*(A(IB+I)+A(IC+I)))+(SIN60*(B(IB+I)-B(IC+I))))
+     *   +C2*((B(IA+I)-0.5*(B(IB+I)+B(IC+I)))-(SIN60*(A(IB+I)-A(IC+I))))
+      I=I+INC3
+      J=J+INC4
+   65 CONTINUE
+      IBASE=IBASE+INC1
+      JBASE=JBASE+INC2
+   70 CONTINUE
+      JBASE=JBASE+JUMP
+   80 CONTINUE
+      RETURN
+C
+C     CODING FOR FACTOR 4
+C
+   90 IA=1
+      JA=1
+      IB=IA+IINK
+      JB=JA+JINK
+      IC=IB+IINK
+      JC=JB+JINK
+      ID=IC+IINK
+      JD=JC+JINK
+      DO 100 L=1,LA
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 95 IJK=1,LOT
+      C(JA+J)=(A(IA+I)+A(IC+I))+(A(IB+I)+A(ID+I))
+      C(JC+J)=(A(IA+I)+A(IC+I))-(A(IB+I)+A(ID+I))
+      D(JA+J)=(B(IA+I)+B(IC+I))+(B(IB+I)+B(ID+I))
+      D(JC+J)=(B(IA+I)+B(IC+I))-(B(IB+I)+B(ID+I))
+      C(JB+J)=(A(IA+I)-A(IC+I))-(B(IB+I)-B(ID+I))
+      C(JD+J)=(A(IA+I)-A(IC+I))+(B(IB+I)-B(ID+I))
+      D(JB+J)=(B(IA+I)-B(IC+I))+(A(IB+I)-A(ID+I))
+      D(JD+J)=(B(IA+I)-B(IC+I))-(A(IB+I)-A(ID+I))
+      I=I+INC3
+      J=J+INC4
+   95 CONTINUE
+      IBASE=IBASE+INC1
+      JBASE=JBASE+INC2
+  100 CONTINUE
+      IF (LA.EQ.M) RETURN
+      LA1=LA+1
+      JBASE=JBASE+JUMP
+      DO 120 K=LA1,M,LA
+      KB=K+K-2
+      KC=KB+KB
+      KD=KC+KB
+      C1=TRIGS(KB+1)
+      S1=TRIGS(KB+2)
+      C2=TRIGS(KC+1)
+      S2=TRIGS(KC+2)
+      C3=TRIGS(KD+1)
+      S3=TRIGS(KD+2)
+      DO 110 L=1,LA
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 105 IJK=1,LOT
+      C(JA+J)=(A(IA+I)+A(IC+I))+(A(IB+I)+A(ID+I))
+      D(JA+J)=(B(IA+I)+B(IC+I))+(B(IB+I)+B(ID+I))
+      C(JC+J)=
+     *    C2*((A(IA+I)+A(IC+I))-(A(IB+I)+A(ID+I)))
+     *   -S2*((B(IA+I)+B(IC+I))-(B(IB+I)+B(ID+I)))
+      D(JC+J)=
+     *    S2*((A(IA+I)+A(IC+I))-(A(IB+I)+A(ID+I)))
+     *   +C2*((B(IA+I)+B(IC+I))-(B(IB+I)+B(ID+I)))
+      C(JB+J)=
+     *    C1*((A(IA+I)-A(IC+I))-(B(IB+I)-B(ID+I)))
+     *   -S1*((B(IA+I)-B(IC+I))+(A(IB+I)-A(ID+I)))
+      D(JB+J)=
+     *    S1*((A(IA+I)-A(IC+I))-(B(IB+I)-B(ID+I)))
+     *   +C1*((B(IA+I)-B(IC+I))+(A(IB+I)-A(ID+I)))
+      C(JD+J)=
+     *    C3*((A(IA+I)-A(IC+I))+(B(IB+I)-B(ID+I)))
+     *   -S3*((B(IA+I)-B(IC+I))-(A(IB+I)-A(ID+I)))
+      D(JD+J)=
+     *    S3*((A(IA+I)-A(IC+I))+(B(IB+I)-B(ID+I)))
+     *   +C3*((B(IA+I)-B(IC+I))-(A(IB+I)-A(ID+I)))
+      I=I+INC3
+      J=J+INC4
+  105 CONTINUE
+      IBASE=IBASE+INC1
+      JBASE=JBASE+INC2
+  110 CONTINUE
+      JBASE=JBASE+JUMP
+  120 CONTINUE
+      RETURN
+C
+C     CODING FOR FACTOR 5
+C
+  130 IA=1
+      JA=1
+      IB=IA+IINK
+      JB=JA+JINK
+      IC=IB+IINK
+      JC=JB+JINK
+      ID=IC+IINK
+      JD=JC+JINK
+      IE=ID+IINK
+      JE=JD+JINK
+      DO 140 L=1,LA
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 135 IJK=1,LOT
+      C(JA+J)=A(IA+I)+(A(IB+I)+A(IE+I))+(A(IC+I)+A(ID+I))
+      D(JA+J)=B(IA+I)+(B(IB+I)+B(IE+I))+(B(IC+I)+B(ID+I))
+      C(JB+J)=(A(IA+I)+COS72*(A(IB+I)+A(IE+I))-COS36*(A(IC+I)+A(ID+I)))
+     *  -(SIN72*(B(IB+I)-B(IE+I))+SIN36*(B(IC+I)-B(ID+I)))
+      C(JE+J)=(A(IA+I)+COS72*(A(IB+I)+A(IE+I))-COS36*(A(IC+I)+A(ID+I)))
+     *  +(SIN72*(B(IB+I)-B(IE+I))+SIN36*(B(IC+I)-B(ID+I)))
+      D(JB+J)=(B(IA+I)+COS72*(B(IB+I)+B(IE+I))-COS36*(B(IC+I)+B(ID+I)))
+     *  +(SIN72*(A(IB+I)-A(IE+I))+SIN36*(A(IC+I)-A(ID+I)))
+      D(JE+J)=(B(IA+I)+COS72*(B(IB+I)+B(IE+I))-COS36*(B(IC+I)+B(ID+I)))
+     *  -(SIN72*(A(IB+I)-A(IE+I))+SIN36*(A(IC+I)-A(ID+I)))
+      C(JC+J)=(A(IA+I)-COS36*(A(IB+I)+A(IE+I))+COS72*(A(IC+I)+A(ID+I)))
+     *  -(SIN36*(B(IB+I)-B(IE+I))-SIN72*(B(IC+I)-B(ID+I)))
+      C(JD+J)=(A(IA+I)-COS36*(A(IB+I)+A(IE+I))+COS72*(A(IC+I)+A(ID+I)))
+     *  +(SIN36*(B(IB+I)-B(IE+I))-SIN72*(B(IC+I)-B(ID+I)))
+      D(JC+J)=(B(IA+I)-COS36*(B(IB+I)+B(IE+I))+COS72*(B(IC+I)+B(ID+I)))
+     *  +(SIN36*(A(IB+I)-A(IE+I))-SIN72*(A(IC+I)-A(ID+I)))
+      D(JD+J)=(B(IA+I)-COS36*(B(IB+I)+B(IE+I))+COS72*(B(IC+I)+B(ID+I)))
+     *  -(SIN36*(A(IB+I)-A(IE+I))-SIN72*(A(IC+I)-A(ID+I)))
+      I=I+INC3
+      J=J+INC4
+  135 CONTINUE
+      IBASE=IBASE+INC1
+      JBASE=JBASE+INC2
+  140 CONTINUE
+      IF (LA.EQ.M) RETURN
+      LA1=LA+1
+      JBASE=JBASE+JUMP
+      DO 160 K=LA1,M,LA
+      KB=K+K-2
+      KC=KB+KB
+      KD=KC+KB
+      KE=KD+KB
+      C1=TRIGS(KB+1)
+      S1=TRIGS(KB+2)
+      C2=TRIGS(KC+1)
+      S2=TRIGS(KC+2)
+      C3=TRIGS(KD+1)
+      S3=TRIGS(KD+2)
+      C4=TRIGS(KE+1)
+      S4=TRIGS(KE+2)
+      DO 150 L=1,LA
+      I=IBASE
+      J=JBASE
+CDIR$ IVDEP
+      DO 145 IJK=1,LOT
+      C(JA+J)=A(IA+I)+(A(IB+I)+A(IE+I))+(A(IC+I)+A(ID+I))
+      D(JA+J)=B(IA+I)+(B(IB+I)+B(IE+I))+(B(IC+I)+B(ID+I))
+      C(JB+J)=
+     *    C1*((A(IA+I)+COS72*(A(IB+I)+A(IE+I))-COS36*(A(IC+I)+A(ID+I)))
+     *      -(SIN72*(B(IB+I)-B(IE+I))+SIN36*(B(IC+I)-B(ID+I))))
+     *   -S1*((B(IA+I)+COS72*(B(IB+I)+B(IE+I))-COS36*(B(IC+I)+B(ID+I)))
+     *      +(SIN72*(A(IB+I)-A(IE+I))+SIN36*(A(IC+I)-A(ID+I))))
+      D(JB+J)=
+     *    S1*((A(IA+I)+COS72*(A(IB+I)+A(IE+I))-COS36*(A(IC+I)+A(ID+I)))
+     *      -(SIN72*(B(IB+I)-B(IE+I))+SIN36*(B(IC+I)-B(ID+I))))
+     *   +C1*((B(IA+I)+COS72*(B(IB+I)+B(IE+I))-COS36*(B(IC+I)+B(ID+I)))
+     *      +(SIN72*(A(IB+I)-A(IE+I))+SIN36*(A(IC+I)-A(ID+I))))
+      C(JE+J)=
+     *    C4*((A(IA+I)+COS72*(A(IB+I)+A(IE+I))-COS36*(A(IC+I)+A(ID+I)))
+     *      +(SIN72*(B(IB+I)-B(IE+I))+SIN36*(B(IC+I)-B(ID+I))))
+     *   -S4*((B(IA+I)+COS72*(B(IB+I)+B(IE+I))-COS36*(B(IC+I)+B(ID+I)))
+     *      -(SIN72*(A(IB+I)-A(IE+I))+SIN36*(A(IC+I)-A(ID+I))))
+      D(JE+J)=
+     *    S4*((A(IA+I)+COS72*(A(IB+I)+A(IE+I))-COS36*(A(IC+I)+A(ID+I)))
+     *      +(SIN72*(B(IB+I)-B(IE+I))+SIN36*(B(IC+I)-B(ID+I))))
+     *   +C4*((B(IA+I)+COS72*(B(IB+I)+B(IE+I))-COS36*(B(IC+I)+B(ID+I)))
+     *      -(SIN72*(A(IB+I)-A(IE+I))+SIN36*(A(IC+I)-A(ID+I))))
+      C(JC+J)=
+     *    C2*((A(IA+I)-COS36*(A(IB+I)+A(IE+I))+COS72*(A(IC+I)+A(ID+I)))
+     *      -(SIN36*(B(IB+I)-B(IE+I))-SIN72*(B(IC+I)-B(ID+I))))
+     *   -S2*((B(IA+I)-COS36*(B(IB+I)+B(IE+I))+COS72*(B(IC+I)+B(ID+I)))
+     *      +(SIN36*(A(IB+I)-A(IE+I))-SIN72*(A(IC+I)-A(ID+I))))
+      D(JC+J)=
+     *    S2*((A(IA+I)-COS36*(A(IB+I)+A(IE+I))+COS72*(A(IC+I)+A(ID+I)))
+     *      -(SIN36*(B(IB+I)-B(IE+I))-SIN72*(B(IC+I)-B(ID+I))))
+     *   +C2*((B(IA+I)-COS36*(B(IB+I)+B(IE+I))+COS72*(B(IC+I)+B(ID+I)))
+     *      +(SIN36*(A(IB+I)-A(IE+I))-SIN72*(A(IC+I)-A(ID+I))))
+      C(JD+J)=
+     *    C3*((A(IA+I)-COS36*(A(IB+I)+A(IE+I))+COS72*(A(IC+I)+A(ID+I)))
+     *      +(SIN36*(B(IB+I)-B(IE+I))-SIN72*(B(IC+I)-B(ID+I))))
+     *   -S3*((B(IA+I)-COS36*(B(IB+I)+B(IE+I))+COS72*(B(IC+I)+B(ID+I)))
+     *      -(SIN36*(A(IB+I)-A(IE+I))-SIN72*(A(IC+I)-A(ID+I))))
+      D(JD+J)=
+     *    S3*((A(IA+I)-COS36*(A(IB+I)+A(IE+I))+COS72*(A(IC+I)+A(ID+I)))
+     *      +(SIN36*(B(IB+I)-B(IE+I))-SIN72*(B(IC+I)-B(ID+I))))
+     *   +C3*((B(IA+I)-COS36*(B(IB+I)+B(IE+I))+COS72*(B(IC+I)+B(ID+I)))
+     *      -(SIN36*(A(IB+I)-A(IE+I))-SIN72*(A(IC+I)-A(ID+I))))
+      I=I+INC3
+      J=J+INC4
+  145 CONTINUE
+      IBASE=IBASE+INC1
+      JBASE=JBASE+INC2
+  150 CONTINUE
+      JBASE=JBASE+JUMP
+  160 CONTINUE
+      RETURN
+      END
+C---------------------------------------------------------------C
+      SUBROUTINE FACT(N,IFAX)
+C     FACTORIZATION ROUTINE THAT FIRST EXTRACTS ALL FACTORS OF 4
+      DIMENSION IFAX(13)
+      IF (N.GT.1) GO TO 10
+      IFAX(1) = 0
+      IF (N.LT.1) IFAX(1) = -99
+      RETURN
+   10 NN=N
+      K=1
+C     TEST FOR FACTORS OF 4
+   20 IF (MOD(NN,4).NE.0) GO TO 30
+      K=K+1
+      IFAX(K)=4
+      NN=NN/4
+      IF (NN.EQ.1) GO TO 80
+      GO TO 20
+C     TEST FOR EXTRA FACTOR OF 2
+   30 IF (MOD(NN,2).NE.0) GO TO 40
+      K=K+1
+      IFAX(K)=2
+      NN=NN/2
+      IF (NN.EQ.1) GO TO 80
+C     TEST FOR FACTORS OF 3
+   40 IF (MOD(NN,3).NE.0) GO TO 50
+      K=K+1
+      IFAX(K)=3
+      NN=NN/3
+      IF (NN.EQ.1) GO TO 80
+      GO TO 40
+C     NOW FIND REMAINING FACTORS
+   50 L=5
+      MAX = SQRT(FLOAT(NN))
+      INC=2
+C     INC ALTERNATELY TAKES ON VALUES 2 AND 4
+   60 IF (MOD(NN,L).NE.0) GO TO 70
+      K=K+1
+      IFAX(K)=L
+      NN=NN/L
+      IF (NN.EQ.1) GO TO 80
+      GO TO 60
+   70 IF (L.GT.MAX) GO TO 75
+      L=L+INC
+      INC=6-INC
+      GO TO 60
+   75 K = K+1
+      IFAX(K) = NN
+   80 IFAX(1)=K-1
+C     IFAX(1) NOW CONTAINS NUMBER OF FACTORS
+      RETURN
+      END
+
+C=====SUBROUTINES FOR FFT PACKAGE END HERE

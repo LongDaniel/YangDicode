@@ -1,0 +1,29 @@
+16					NCPU
+0					ISTART
+0					ITURBINE
+1.0	1.0				PEX,PEY
+1.0 	1.0	        		ZL,HBAR
+257 	257	257			NX,NY,NZ
+257	257				NXS,NYS
+0.00125	20    0.0		     	DT,NTIME,TIME
+6	1.E-8				ITMAX,ERLIM
+5.7929e4	0.	 	        	RESBOT,RESTOP
+2.3997e-2	2000.			FR2,WE
+20  	20 	    	            	NOUTD,NOUTC
+1.5	1.			     	CLBETA,CLGAMA		
+0.15                               	ARM
+18 	18 	7                 	MODX,MODY,MODZ (XL/MODX=ZL/MODZ)
+0.1					AKA
+0.1	4	2			HKA,NWAVE,CRAT
+0.	0.1				TIMEWAVY,TCOEF
+7					IWAVY
+5.5E-2	4	1			ERVFILT,NFILT,IFILT
+1	1				IPA,NTH
+600.0	0.04				TIMEP,TCP
+600.0					TIMEW
+0.0012285				RDGL
+50000.0					TIMETURB
+
+########################################################
+#	for free-slip top condition, restop===0
+########################################################
